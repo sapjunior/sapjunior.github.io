@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Object Detection Is Measured [2110433 Computer Vision]</title>
+<style>
+  :root{
+    --bg:#f7faff;--bg2:#eef4ff;--card:#ffffff;--card2:#f1f6ff;
+    --text:#0b1b34;--muted:#61708a;--faint:#8b97ac;
+    --primary:#2f6bff;--primary2:#1e56f0;--accent:#ff8a00;
+    --success:#2ecc71;--danger:#ff5252;--warning:#f7b731;
+    --border:#d9e4ff;--shadow:0 10px 30px rgba(13,30,80,.10);
+    --shadow-sm:0 4px 14px rgba(13,30,80,.07);
+    --r-lg:16px;--r:12px;--r-sm:10px;
+    --p3:#2f6bff;--p4:#ff8a00;--p5:#7c3aed;--gt:#2ecc71;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,'Courier New',monospace;
+    --sans:ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,'Noto Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);background:linear-gradient(180deg,var(--bg),var(--bg2));
+    color:var(--text);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:0 26px}
+  .mono{font-family:var(--mono)}
+
+  header.hero{padding:54px 0 26px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--primary);
+    background:#e7eeff;border:1px solid var(--border);padding:6px 12px;border-radius:999px}
+  h1{font-size:clamp(30px,5.4vw,50px);font-weight:800;line-height:1.1;letter-spacing:-.02em;
+    margin:18px 0 0}
+  h1 .hl{color:var(--primary)}
+  .hero-sub{margin-top:14px;max-width:660px;color:var(--muted);font-size:16px}
+  .hero-meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted)}
+  .pill b{color:var(--text)}
+
+  nav{position:sticky;top:0;z-index:40;background:rgba(247,250,255,.92);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  nav .wrap{display:flex;gap:3px;overflow-x:auto;padding:8px 22px}
+  nav a{font-size:12px;font-weight:600;text-decoration:none;color:var(--muted);
+    padding:8px 10px;border-radius:8px;white-space:nowrap;transition:.15s}
+  nav a:hover{color:var(--text);background:var(--card2)}
+  nav a.on{color:#fff;background:var(--primary)}
+
+  section.act{padding:46px 0}
+  section.act + section.act{border-top:1px solid var(--border)}
+  .act-head{display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+  .act-num{font-family:var(--mono);font-weight:700;font-size:14px;color:#fff;
+    background:linear-gradient(145deg,var(--primary),var(--primary2));
+    width:42px;height:42px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;
+    box-shadow:0 8px 18px rgba(47,107,255,.28)}
+  h2{font-size:clamp(21px,3.5vw,29px);font-weight:800;letter-spacing:-.015em}
+  .act-lede{font-size:16.5px;color:var(--muted);margin:12px 0 18px;max-width:780px}
+  h3{font-size:17px;font-weight:700;margin:24px 0 8px}
+  p{margin:10px 0;color:#33425e}
+  p strong{color:var(--text);font-weight:700}
+  .acc-gt{color:var(--gt);font-weight:700}.acc-pr{color:var(--primary);font-weight:700}
+  .acc-fp{color:var(--danger);font-weight:700}.acc-acc{color:var(--accent);font-weight:700}
+
+  ul.bul{list-style:none;margin:12px 0;display:flex;flex-direction:column;gap:8px}
+  ul.bul li{padding-left:24px;position:relative;color:#33425e;font-size:15px}
+  ul.bul li::before{content:"";position:absolute;left:5px;top:9px;width:7px;height:7px;
+    border-radius:2px;background:var(--primary)}
+  ul.bul li strong{color:var(--text)}
+
+  .card{background:linear-gradient(180deg,var(--card),var(--card2));
+    border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+  .viz{margin:18px 0;overflow:hidden}
+  .viz-pad{padding:18px}
+  .viz-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:12px 16px;border-top:1px solid var(--border);background:var(--card2)}
+  .viz-cap{font-size:12.5px;color:var(--muted)}
+  canvas,svg.fig{display:block;width:100%;height:auto;max-width:1280px;margin-inline:auto}
+
+  button.btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 12px;
+    border-radius:9px;border:1px solid var(--border);background:#fff;color:var(--text);
+    cursor:pointer;transition:.13s;white-space:nowrap}
+  button.btn:hover{background:var(--card2)}
+  button.btn.pri{background:linear-gradient(145deg,var(--primary),var(--primary2));
+    color:#fff;border-color:var(--primary);box-shadow:0 6px 14px rgba(47,107,255,.25)}
+  button.btn.pri:hover{filter:brightness(1.06)}
+  button.btn:disabled{opacity:.45;cursor:not-allowed}
+  button.btn.on{color:#fff;font-weight:700;background:var(--primary);border-color:var(--primary)}
+  button.btn.sm{padding:7px 10px;font-size:12px}
+  .track{flex:1;min-width:70px;height:6px;background:#e3ebfb;border-radius:999px;overflow:hidden}
+  .track>i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));
+    width:0%;transition:width .3s}
+  .ctl-label{font-size:12.5px;font-weight:600;color:var(--muted);
+    display:flex;justify-content:space-between}
+  .ctl-label b{color:var(--primary);font-size:14px}
+  input[type=range]{width:100%;margin:7px 0 0;accent-color:var(--primary)}
+
+  .takeaway{display:flex;gap:12px;align-items:flex-start;margin:20px 0 4px;
+    background:#e7eeff;border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+  .takeaway .ico{width:26px;height:26px;border-radius:7px;flex-shrink:0;
+    background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px}
+  .takeaway .t{font-size:14.5px}
+  .takeaway .t b{color:var(--primary)}
+  .note{border-left:3px solid var(--accent);background:#fff7ec;border-radius:0 var(--r) var(--r) 0;
+    padding:12px 16px;margin:16px 0}
+  .note .tag{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--accent)}
+  .note p{margin:4px 0 0;font-size:14px;color:#5a4a30}
+  .note p strong{color:#2a2114}
+  .trap{border-left-color:var(--danger);background:#fff4f4}
+  .trap .tag{color:var(--danger)}
+  .trap p{color:#5a3030}.trap p strong{color:#2a1414}
+
+  .formula{font-family:var(--mono);font-size:13px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--r);padding:12px 15px;margin:12px 0;color:var(--text);overflow-x:auto}
+  .formula .cg{color:var(--gt)}.formula .cr{color:var(--danger)}
+  .formula .cp{color:var(--primary)}.formula .ca{color:var(--accent)}
+  @keyframes flashY{0%{background:#fff3df;box-shadow:0 0 0 2px var(--accent) inset}
+    100%{background:#fff;box-shadow:0 0 0 2px rgba(255,138,0,0) inset}}
+  .flash{animation:flashY .7s ease-out}
+
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.twocol{grid-template-columns:1fr}}
+  .mini{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px}
+  .mini h4{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+  .mini p{font-size:13px;margin:4px 0 0}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  .stat{display:flex;gap:10px;flex-wrap:wrap}
+  .stat .box{flex:1;min-width:104px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--r);padding:11px 13px;text-align:center}
+  .stat .box .k{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.03em;
+    text-transform:uppercase}
+  .stat .box .v{font-family:var(--mono);font-size:24px;font-weight:800;margin-top:3px}
+  .infoline{font-size:13px;color:#33425e;margin-top:10px;min-height:20px}
+  .infoline b{color:var(--text)}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chips span{font-family:var(--mono);font-size:11.5px;padding:4px 7px;border-radius:6px;
+    border:1px solid var(--border);background:#fff;color:#5a6a85;transition:.12s}
+  .chips span.tp{border-color:#a9e6c0;color:#1a7d44;background:#eafaf0}
+  .chips span.fp{border-color:#f4c4c4;color:#c0392b;background:#fdeeee}
+  .chips span.cur{outline:2px solid var(--primary);outline-offset:1px;font-weight:800}
+  .chips span.dim{opacity:.32}
+
+  footer{border-top:1px solid var(--border);margin-top:30px;padding:26px 0 56px;
+    color:var(--muted);font-size:12.5px}
+  footer .s{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-family:var(--mono);
+    font-size:11.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+
+<header class="hero"><div class="wrap">
+  <span class="eyebrow">◆ Object Detection · A Visual Course</span>
+  <h1>How Object Detection Is <span class="hl">Measured</span></h1>
+  <p class="hero-sub">
+    <em>2110433 Computer Vision - Thananop Kobchaisawat</em><br/>
+    A detector outputs boxes. How do you turn that into a single score that
+    says "this model is better than that one"? We build the metric one idea at a time —
+    from <em>IoU</em> all the way to <em>mAP@0.5:0.95</em>.</p>
+  <div class="hero-meta">
+    <span class="pill"><b>7 acts</b> · IoU → precision/recall → mAP</span>
+    <span class="pill">A primer — best taken <b>before</b> the YOLOv26 course</span>
+  </div>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#a1" class="nl">1 · The Problem</a>
+  <a href="#a2" class="nl">2 · IoU</a>
+  <a href="#a3" class="nl">3 · TP / FP / FN</a>
+  <a href="#a4" class="nl">4 · Precision &amp; Recall</a>
+  <a href="#a5" class="nl">5 · The PR Curve</a>
+  <a href="#a6" class="nl">6 · AP &amp; mAP</a>
+  <a href="#a7" class="nl">7 · mAP@50:95</a>
+  <a href="#sum" class="nl">Summary</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- ============ ACT 1 ============ -->
+<section class="act" id="a1">
+  <div class="act-head"><span class="act-num">01</span>
+    <h2>The Problem — You Can't Just Compare Boxes</h2></div>
+  <p class="act-lede">In classification you compare one predicted label to one true label and it
+    either matches or it doesn't. Detection gives you no such luxury.</p>
+
+  <p>A detector's output is a <strong>variable-length list</strong>: each entry is a box, a
+    class, and a <strong>confidence</strong> score. The ground truth is also a list of boxes.
+    Two lists — of possibly different lengths — and no row that lines up with another.</p>
+  <p>You cannot write <span class="mono">prediction == ground_truth</span>. A predicted box at
+    pixels <span class="mono">(102, 88, 240, 196)</span> and a true box at
+    <span class="mono">(98, 91, 244, 190)</span> describe the <em>same car</em> — but they are
+    not equal numbers. Before any score exists, two questions must be answered:</p>
+  <ul class="bul">
+    <li><strong>Which prediction belongs to which ground-truth box?</strong> Nothing in the
+      output says so — it has to be worked out from the geometry.</li>
+    <li><strong>Once paired, how good is the pairing?</strong> A box that is close but loose
+      should not score the same as one that fits perfectly.</li>
+  </ul>
+  <p>And some boxes pair with <em>nothing</em>: a prediction over empty road is a
+    <strong class="acc-fp">false alarm</strong>; a real object the model never boxed is a
+    <strong>miss</strong>. Tap the toggle to see the raw output, then the matching the metric
+    has to reconstruct:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <canvas id="a1canvas" height="300"></canvas>
+    <div class="infoline" id="a1note" style="font-size:14px"></div>
+  </div>
+  <div class="viz-bar">
+    <button class="btn pri" id="a1raw">Raw output</button>
+    <button class="btn" id="a1match">Show the matching</button>
+    <span class="viz-cap">Green = ground truth · Blue = the detector's predictions</span>
+  </div>
+  </div>
+
+  <p>The whole rest of this course is one long answer to those two questions — a recipe that
+    turns two messy lists of boxes into a number between 0 and 1.</p>
+
+  <div class="takeaway"><div class="ico">1</div><div class="t">
+    <b>Key idea —</b> Detection output and ground truth are two unaligned lists of boxes.
+    Scoring a detector means first <em>matching</em> them, then <em>grading</em> each match.</div></div>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act" id="a2">
+  <div class="act-head"><span class="act-num">02</span><h2>IoU — Grading the Overlap</h2></div>
+  <p class="act-lede">Start with the second question: given one predicted box and one true box,
+    how well do they overlap? We need a single number — and the obvious choice is a trap.</p>
+
+  <p>The tempting answer is <strong>intersection</strong>: the area where the two boxes overlap.
+    Bigger overlap, better box. But intersection is <strong class="acc-fp">not normalized</strong>
+    — and that breaks it completely.</p>
+
+  <div class="note trap"><span class="tag">▸ The trap</span>
+    <p>A box that covers the <strong>entire image</strong> fully contains every ground-truth box.
+    Its intersection with each one is <strong>as large as possible</strong> — a perfect score by
+    the intersection rule. Yet it is a useless detection. Intersection rewards boxes for being
+    <em>big</em>, not for being <em>right</em>.</p></div>
+
+  <p>The fix is to divide by the <strong>union</strong> — the total area the two boxes cover
+    together. This is <strong>Intersection over Union (IoU)</strong>, also called the Jaccard
+    index:</p>
+
+  <div class="formula">
+    IoU = <span class="cg">intersection</span> ÷ <span class="cp">union</span>
+    &nbsp;&nbsp;∈&nbsp; [0, 1]
+    &nbsp;&nbsp;·&nbsp;&nbsp; <span class="cp">union</span> = area(A) + area(B) −
+    <span class="cg">intersection</span>
+  </div>
+
+  <p>Union grows whenever <em>either</em> box has area the other doesn't. So a box that is too
+    big is punished by a large union; a box that is too small is punished by a small
+    intersection. IoU is <strong>1</strong> only when the boxes are identical, <strong>0</strong>
+    when they don't touch, and — because it is a ratio — it is <strong>scale-invariant</strong>:
+    the same shapes score the same whether the object is near or far.</p>
+
+  <p>Drag the sliders to move and resize the <span class="acc-pr">predicted box</span> over the
+    fixed <span class="acc-gt">ground-truth box</span>. Watch IoU against the two
+    coverage numbers that <em>look</em> reasonable but aren't:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;
+      max-width:1000px;margin:0 auto">
+      <svg id="a2fig" class="fig" viewBox="0 0 380 360"
+        style="width:420px;flex-shrink:0;margin:0"></svg>
+      <div style="flex:1;min-width:300px">
+        <div id="a2sliders" style="display:flex;flex-direction:column;gap:12px"></div>
+        <div class="stat" style="margin-top:16px">
+          <div class="box"><div class="k">IoU</div>
+            <div class="v" id="a2iou" style="color:var(--primary)">—</div></div>
+        </div>
+        <div class="stat" style="margin-top:10px">
+          <div class="box"><div class="k">GT covered</div>
+            <div class="v" id="a2cov" style="font-size:19px;color:var(--gt)">—</div></div>
+          <div class="box"><div class="k">Box wasted</div>
+            <div class="v" id="a2waste" style="font-size:19px;color:var(--danger)">—</div></div>
+        </div>
+        <p style="margin:11px 0 0;font-size:11.5px;line-height:1.55;color:var(--muted)">
+          <b>GT covered</b> = intersection ÷ GT area &nbsp;·&nbsp;
+          <b>Box wasted</b> = the predicted area that misses the GT. Each looks fine alone —
+          a huge box scores 100% covered. IoU is the one number that holds <em>both</em>
+          honest at once.</p>
+      </div>
+    </div>
+  </div>
+  <div class="viz-bar">
+    <span class="viz-cap" style="font-weight:700">Preset:</span>
+    <span id="a2presets" style="display:flex;gap:5px;flex-wrap:wrap"></span>
+  </div>
+  </div>
+
+  <p>Try the <strong>"Swallow"</strong> preset — the predicted box engulfs the GT. "GT covered"
+    reads 100%, but IoU collapses, because the union is enormous. That single ratio is exactly
+    what the rest of detection scoring is built on.</p>
+
+  <div class="takeaway"><div class="ico">2</div><div class="t">
+    <b>Key idea —</b> IoU = intersection ÷ union. Dividing by union is what stops a big sloppy
+    box from cheating — it grades fit, not size.</div></div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act" id="a3">
+  <div class="act-head"><span class="act-num">03</span>
+    <h2>From IoU to a Verdict — TP, FP, FN</h2></div>
+  <p class="act-lede">IoU is a smooth number in [0, 1]. To <em>count</em> how a detector did, that
+    smooth number has to become a yes-or-no decision.</p>
+
+  <p>We pick an <strong>IoU threshold</strong> — say 0.5. A prediction "hits" a ground-truth box
+    only if their IoU clears the threshold <em>and</em> the classes match. That turns every
+    prediction and every GT box into one of three buckets:</p>
+  <ul class="bul">
+    <li><strong class="acc-gt">True Positive (TP)</strong> — a prediction that correctly hits a
+      GT box: right class, IoU ≥ threshold, and that GT not already taken.</li>
+    <li><strong class="acc-fp">False Positive (FP)</strong> — a prediction that hits nothing: it
+      is over empty space, has too little overlap, the wrong class, or it is a
+      <em>duplicate</em> of a GT another prediction already claimed.</li>
+    <li><strong>False Negative (FN)</strong> — a ground-truth box that no prediction hit. A
+      <em>miss</em>.</li>
+  </ul>
+  <p>There is deliberately no "true negative". Background isn't a finite thing you can count —
+    an image contains unlimited empty space — so detection scoring only ever uses TP, FP and FN.</p>
+
+  <h3>The matching procedure</h3>
+  <p>Matching is <strong>greedy and confidence-ordered</strong>. Sort the predictions of one
+    class by confidence, highest first. Walk down the list; each prediction claims the
+    <em>highest-IoU still-unclaimed</em> GT box of its class. If that IoU clears the threshold it
+    is a TP and the GT is now taken; otherwise it is an FP. Any GT left unclaimed at the end is
+    an FN. Confidence order is what decides which of two overlapping predictions gets the GT —
+    the confident one wins, the other becomes a duplicate FP.</p>
+
+  <p>Drag the IoU threshold. Watch loose boxes lose their TP status, and watch the counts move:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <canvas id="a3canvas" height="320"></canvas>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-top:14px">
+      <div style="flex:1;min-width:240px">
+        <div class="ctl-label"><span>IoU threshold</span><b id="a3thr">0.50</b></div>
+        <input type="range" id="a3slider" min="0.05" max="0.95" step="0.05" value="0.5">
+      </div>
+      <div class="stat" style="flex:2;min-width:280px">
+        <div class="box"><div class="k">True Pos</div>
+          <div class="v" id="a3tp" style="color:var(--gt)">0</div></div>
+        <div class="box"><div class="k">False Pos</div>
+          <div class="v" id="a3fp" style="color:var(--danger)">0</div></div>
+        <div class="box"><div class="k">False Neg</div>
+          <div class="v" id="a3fn" style="color:var(--muted)">0</div></div>
+      </div>
+    </div>
+    <div class="infoline" id="a3note"></div>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">The counts cover the <b>car</b> class only —
+    metrics are always computed one class at a time.</span></div>
+  </div>
+
+  <div class="note"><span class="tag">▸ One mistake, counted twice</span>
+    <p>Look at the box drawn over the <strong>person</strong> — the detector placed it well, but
+    labelled it <strong>"car"</strong>. For the <strong>car</strong> class it is a
+    <strong>false positive</strong>: a car was predicted where there is none. For the
+    <strong>person</strong> class that person now has no matching prediction, so it is a
+    <strong>false negative</strong>. A single box in the right place but the wrong class is
+    penalised <em>twice over</em> — once in each class's tally.</p></div>
+
+  <div class="takeaway"><div class="ico">3</div><div class="t">
+    <b>Key idea —</b> An IoU threshold + class check sorts every box into TP, FP or FN.
+    Matching is greedy by confidence, and the loser of two overlapping boxes becomes a
+    duplicate FP.</div></div>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act" id="a4">
+  <div class="act-head"><span class="act-num">04</span><h2>Precision &amp; Recall</h2></div>
+  <p class="act-lede">Three counts — TP, FP, FN — collapse neatly into two ratios that measure
+    the two different ways a detector can be wrong.</p>
+
+  <div class="twocol">
+    <div class="mini"><h4><span class="dot" style="background:var(--primary)"></span>Precision
+      — "are my detections trustworthy?"</h4>
+      <p class="mono" style="font-size:13px;color:var(--text);font-weight:700">
+        TP ÷ (TP + FP)</p>
+      <p>Of every box the detector <em>claimed</em>, what fraction was real? Low precision means
+        it cries wolf — lots of false alarms.</p></div>
+    <div class="mini"><h4><span class="dot" style="background:var(--accent)"></span>Recall
+      — "did I find everything?"</h4>
+      <p class="mono" style="font-size:13px;color:var(--text);font-weight:700">
+        TP ÷ (TP + FN)</p>
+      <p>Of every object that actually <em>exists</em>, what fraction did the detector find?
+        Low recall means it misses things.</p></div>
+  </div>
+
+  <p>The two are in tension, and the lever between them is <strong>confidence</strong>. Every
+    prediction carries a confidence score — and we keep only the predictions above a
+    <strong>confidence threshold</strong>, discarding the rest before matching.</p>
+
+  <div class="note"><span class="tag">▸ Where confidence comes from</span>
+    <p>Confidence is the detector's own <strong>class score</strong> for a box — a number it
+    emits alongside every prediction, saying how sure it is that the box is real and correctly
+    labelled. Where that number is <em>produced</em> inside the network is a question for the
+    YOLOv26 course; here we only need to know it <em>exists</em>. Nothing in this act is special
+    to evaluation — we are simply <em>thresholding output the model already gives us</em>.</p></div>
+
+  <p>Slide the confidence threshold. Low threshold: every box is kept — recall is high, but the
+    false alarms drag precision down. High threshold: only the surest boxes survive — precision
+    climbs, but real objects get discarded and recall falls.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <canvas id="a4canvas" height="320"></canvas>
+    <div style="margin-top:14px">
+      <div class="ctl-label"><span>Confidence threshold — keep predictions scoring at least
+        this</span><b id="a4thr">0.00</b></div>
+      <input type="range" id="a4slider" min="0" max="0.95" step="0.01" value="0">
+    </div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">
+      <div style="flex:1;min-width:220px">
+        <div class="ctl-label"><span style="color:var(--primary);font-weight:700">Precision</span>
+          <b id="a4pv">—</b></div>
+        <div class="track" style="margin-top:6px;height:9px"><i id="a4pbar"
+          style="background:var(--primary)"></i></div>
+        <div class="viz-cap mono" id="a4pf" style="margin-top:5px"></div>
+      </div>
+      <div style="flex:1;min-width:220px">
+        <div class="ctl-label"><span style="color:var(--accent);font-weight:700">Recall</span>
+          <b id="a4rv" style="color:var(--accent)">—</b></div>
+        <div class="track" style="margin-top:6px;height:9px"><i id="a4rbar"
+          style="background:var(--accent)"></i></div>
+        <div class="viz-cap mono" id="a4rf" style="margin-top:5px"></div>
+      </div>
+    </div>
+    <div class="infoline" id="a4note"></div>
+  </div>
+  <div class="viz-bar">
+    <span class="viz-cap" style="font-weight:700">Jump to:</span>
+    <span id="a4presets" style="display:flex;gap:5px"></span>
+    <span class="viz-cap">— IoU threshold fixed at 0.5</span>
+  </div>
+  </div>
+
+  <p>Notice the asymmetry: raising the threshold from 0 first removes only false positives, so
+    <strong>precision rises while recall stays flat</strong>. Push further and it starts
+    discarding true positives too — now <strong>recall falls</strong>. One number can't capture
+    this; the detector's quality <em>is</em> the whole trade-off.</p>
+
+  <div class="takeaway"><div class="ico">4</div><div class="t">
+    <b>Key idea —</b> Precision = fraction of detections that are real; recall = fraction of
+    real objects found. The confidence threshold trades one for the other.</div></div>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act" id="a5">
+  <div class="act-head"><span class="act-num">05</span><h2>The Precision–Recall Curve</h2></div>
+  <p class="act-lede">If no single confidence threshold tells the whole story — then don't pick
+    one. Sweep through every threshold and record what happens.</p>
+
+  <h3>First: one pool, not one image</h3>
+  <p>Precision and recall are not computed per image. Every prediction for a class, from
+    <strong>every image in the dataset</strong>, is poured into a <strong>single pool</strong>
+    and sorted together by confidence. The ground-truth boxes are likewise counted across the
+    whole dataset. The curve below describes the detector, not any one picture:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="a5pool" class="fig" viewBox="0 0 1020 190"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">Predictions from many images are merged into one
+    confidence-ranked list before scoring begins.</span></div>
+  </div>
+
+  <h3>Walking down the ranked list</h3>
+  <p>Sweeping the confidence threshold from high to low is the same as <strong>walking down the
+    ranked pool one prediction at a time</strong>. After revealing each prediction, label it TP
+    or FP at the chosen IoU threshold, then recompute:</p>
+  <div class="formula">
+    precision = <span class="cg">TP</span> ÷ (<span class="cg">TP</span> +
+      <span class="cr">FP</span>) &nbsp;&nbsp;·&nbsp;&nbsp;
+    recall = <span class="cg">TP</span> ÷ <span class="cp">total ground-truth boxes</span>
+  </div>
+  <p>The two denominators behave differently, and that is the whole shape of the curve.
+    Precision's denominator <strong>grows with every step</strong> — each new box, hit or miss,
+    is one more claim. Recall's denominator is <strong>fixed</strong> — the dataset has however
+    many objects it has. So a TP nudges recall rightward and lifts precision; an FP moves recall
+    not at all and drops precision straight down. Step through it:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+      <svg id="a5curve" class="fig" viewBox="0 0 430 400"
+        style="width:430px;flex-shrink:0;margin:0"></svg>
+      <div style="flex:1;min-width:280px">
+        <div class="viz-cap" style="font-weight:700;color:var(--text);margin-bottom:6px">
+          Confidence-ranked pool — <span class="acc-gt">TP</span> /
+          <span class="acc-fp">FP</span> at IoU 0.5</div>
+        <div class="chips" id="a5chips"></div>
+        <div class="stat" style="margin-top:14px">
+          <div class="box"><div class="k">Precision</div>
+            <div class="v" id="a5p" style="font-size:20px;color:var(--primary)">—</div></div>
+          <div class="box"><div class="k">Recall</div>
+            <div class="v" id="a5r" style="font-size:20px;color:var(--accent)">—</div></div>
+        </div>
+        <div class="infoline mono" id="a5calc" style="font-size:12px"></div>
+      </div>
+    </div>
+  </div>
+  <div class="viz-bar">
+    <button class="btn" id="a5prev">‹ Back</button>
+    <button class="btn pri" id="a5next">Reveal next ›</button>
+    <button class="btn sm" id="a5all">Show all</button>
+    <div class="track"><i id="a5fill"></i></div>
+    <span class="viz-cap mono" id="a5step"></span>
+  </div>
+  </div>
+
+  <p>The trace zig-zags — every FP causes a downward drop, every TP a step to the right and a
+    small recovery. A strong detector keeps precision high deep into the list; this is the raw
+    material the final score is squeezed from.</p>
+
+  <div class="takeaway"><div class="ico">5</div><div class="t">
+    <b>Key idea —</b> Pool every prediction for a class, rank by confidence, and walk the list:
+    each step plots one (recall, precision) point. Together they form the PR curve.</div></div>
+</section>
+
+<!-- ============ ACT 6 ============ -->
+<section class="act" id="a6">
+  <div class="act-head"><span class="act-num">06</span><h2>AP and mAP — One Number at Last</h2></div>
+  <p class="act-lede">A curve still isn't a score. The final step squeezes the entire PR curve
+    into a single number: the area underneath it.</p>
+
+  <p><strong>Average Precision (AP)</strong> is the <strong>area under the PR curve</strong>
+    — a value in [0, 1]. A curve that hugs the top-right corner (high precision held all the way
+    to high recall) encloses an area near 1; a weak detector's curve sags toward the origin.</p>
+
+  <p>One detail first. The raw curve is jagged, and those FP-driven dips would make the area
+    jumpy and unfair. So before integrating, the curve is <strong>interpolated</strong>: at each
+    recall, precision is replaced by the <em>best precision reached at any equal-or-higher
+    recall</em>. This casts a monotonically non-increasing "envelope" over the zig-zag — you are
+    not rewarded for a dip you later climbed back out of. Toggle the envelope on and off:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+      <svg id="a6curve" class="fig" viewBox="0 0 430 400"
+        style="width:430px;flex-shrink:0;margin:0"></svg>
+      <div style="flex:1;min-width:260px">
+        <div class="stat">
+          <div class="box"><div class="k">Average Precision</div>
+            <div class="v" id="a6ap" style="color:var(--primary)">—</div></div>
+        </div>
+        <p style="margin:14px 0 0;font-size:13.5px;color:#33425e">The shaded region
+          <em>is</em> the AP. With the envelope on, the area is the formal
+          <strong>AP</strong> — the all-point interpolation used by the COCO benchmark
+          (evaluated on a fine 101-point recall grid).</p>
+        <p style="margin:10px 0 0;font-size:13px;color:var(--muted)">The raw curve and the
+          envelope share the same true positives — the envelope only smooths the
+          <em>bookkeeping</em>, never invents accuracy.</p>
+      </div>
+    </div>
+  </div>
+  <div class="viz-bar">
+    <button class="btn pri" id="a6raw">Raw curve</button>
+    <button class="btn" id="a6env">Interpolated envelope</button>
+    <span class="viz-cap">Shaded area under the curve = AP for this class</span>
+  </div>
+  </div>
+
+  <h3>The "m" in mAP — mean over classes</h3>
+  <p>AP is a <strong>per-class</strong> number: there is an AP for "car", another for "person",
+    another for "bike". <strong>mean Average Precision (mAP)</strong> is simply their average.
+    That is all the "m" means — <em>mean across the classes</em>:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="a6map" class="fig" viewBox="0 0 1020 250"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">Each class gets its own PR curve and its own AP;
+    mAP is the mean. A class the detector handles poorly drags the whole score down.</span></div>
+  </div>
+
+  <div class="takeaway"><div class="ico">6</div><div class="t">
+    <b>Key idea —</b> AP is the area under one class's interpolated PR curve. mAP averages AP
+    across all classes — one number for the whole detector.</div></div>
+</section>
+
+<!-- ============ ACT 7 ============ -->
+<section class="act" id="a7">
+  <div class="act-head"><span class="act-num">07</span>
+    <h2>mAP@0.5 and mAP@0.5:0.95</h2></div>
+  <p class="act-lede">One number is still hiding a choice. Back in Act 3 the IoU threshold —
+    0.5 — was picked by hand. Different thresholds ask for different strictness.</p>
+
+  <p>Every TP/FP label, and therefore every PR curve and every AP, depends on that IoU
+    threshold. Name it explicitly and you get a family of metrics:</p>
+  <ul class="bul">
+    <li><strong>mAP@0.5</strong> (also written <span class="mono">mAP50</span>) — AP computed
+      with the IoU threshold at 0.5. <strong>Lenient</strong>: a box only roughly on the object
+      still counts as a hit. It measures "did you find the thing?"</li>
+    <li><strong>mAP@0.5:0.95</strong> (<span class="mono">mAP50-95</span>) — the IoU threshold
+      is swept over <strong>ten values</strong>: 0.50, 0.55, …, 0.95. AP is computed at each,
+      and the ten are averaged. <strong>Strict</strong>: it also measures "how tightly?" This is
+      the primary COCO metric, and the headline number modern detectors report.</li>
+  </ul>
+
+  <p>As the IoU threshold rises, loosely-fitting boxes that passed at 0.5 fail — TPs flip to
+    FPs, recall caps lower, and AP drops. Drag the threshold and watch AP fall; the bar chart
+    holds all ten AP values, and their mean is <span class="mono">mAP@0.5:0.95</span>:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="a7bars" class="fig" viewBox="0 0 1020 300"></svg>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;margin-top:14px">
+      <div style="flex:1;min-width:240px">
+        <div class="ctl-label"><span>IoU threshold</span><b id="a7thr">0.50</b></div>
+        <input type="range" id="a7slider" min="0.5" max="0.95" step="0.05" value="0.5">
+      </div>
+      <div class="stat" style="flex:2;min-width:300px">
+        <div class="box"><div class="k">AP @ this IoU</div>
+          <div class="v" id="a7ap" style="font-size:21px;color:var(--primary)">—</div></div>
+        <div class="box"><div class="k">TP at this IoU</div>
+          <div class="v" id="a7tp" style="font-size:21px;color:var(--gt)">—</div></div>
+        <div class="box" style="background:#0b1b34">
+          <div class="k" style="color:#9aa6bc">mAP@0.5:0.95</div>
+          <div class="v" id="a7map" style="font-size:21px;color:#fff">—</div></div>
+      </div>
+    </div>
+    <div class="infoline" id="a7note"></div>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">One class shown. The full metric also averages
+    across classes — strict IoU sweep <em>and</em> class mean together.</span></div>
+  </div>
+
+  <div class="note"><span class="tag">▸ Why the gap matters</span>
+    <p>A detector can post a high <span class="mono">mAP@0.5</span> and a much lower
+    <span class="mono">mAP@0.5:0.95</span>. That gap is a diagnosis: it finds the objects but
+    its boxes are <strong>loose</strong>. Two models with equal mAP50 are not equal — the one
+    with the higher mAP50-95 localizes more tightly.</p></div>
+
+  <div class="takeaway"><div class="ico">7</div><div class="t">
+    <b>Key idea —</b> The IoU threshold sets strictness. mAP@0.5 rewards finding objects;
+    mAP@0.5:0.95 averages ten thresholds and also rewards fitting them tightly.</div></div>
+</section>
+
+<!-- ============ SUMMARY ============ -->
+<section class="act" id="sum">
+  <div class="act-head"><span class="act-num">★</span><h2>The Big Picture</h2></div>
+  <p class="act-lede">Seven ideas, one pipeline — from two unaligned lists of boxes to a single
+    benchmark number.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="sumFig" class="fig" viewBox="0 0 1020 230"></svg>
+  </div></div>
+
+  <h3>The thread, one line each</h3>
+  <ul class="bul">
+    <li><strong>1 · The problem</strong> — output and truth are unaligned lists; scoring means
+      matching, then grading.</li>
+    <li><strong>2 · IoU</strong> — intersection ÷ union grades overlap honestly; union stops big
+      boxes from cheating.</li>
+    <li><strong>3 · TP / FP / FN</strong> — an IoU threshold + class check turns each box into a
+      hit, a false alarm, or a miss.</li>
+    <li><strong>4 · Precision &amp; recall</strong> — trustworthiness vs completeness; the
+      confidence threshold trades them.</li>
+    <li><strong>5 · The PR curve</strong> — pool and rank all predictions; each step plots one
+      (recall, precision) point.</li>
+    <li><strong>6 · AP &amp; mAP</strong> — AP is the area under the interpolated curve; mAP is
+      the mean over classes.</li>
+    <li><strong>7 · mAP@0.5:0.95</strong> — sweep the IoU threshold over ten values to also
+      reward tight localization.</li>
+  </ul>
+
+  <h3>Two thresholds, do not confuse them</h3>
+  <div class="twocol">
+    <div class="mini"><h4><span class="dot" style="background:var(--gt)"></span>IoU threshold</h4>
+      <p>Decides if a matched box is <strong>tight enough</strong> to be a TP. Sweeping it gives
+      mAP@0.5 vs mAP@0.5:0.95.</p></div>
+    <div class="mini"><h4><span class="dot" style="background:var(--accent)"></span>Confidence
+      threshold</h4>
+      <p>Decides which predictions are <strong>kept</strong> at all. Sweeping it traces out the
+      whole precision–recall curve.</p></div>
+  </div>
+
+  <div class="takeaway"><div class="ico">★</div><div class="t">
+    <b>The whole metric in one sentence —</b> Match predictions to ground truth with IoU, count
+    TP/FP/FN, sweep confidence to draw a precision–recall curve, take its area as AP, average
+    over classes for mAP, and sweep the IoU threshold for mAP@0.5:0.95.</div></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <div style="margin-top:5px;font-size:13px;color:var(--muted)">Created by
+    <strong style="color:var(--text)">Thananop Kobchaisawat</strong></div>
+</div></footer>
+
+<script>
+const DPR=Math.min(window.devicePixelRatio||1,2);
+function fit(cv,h){let w=cv.clientWidth||cv.parentNode.clientWidth||cv.parentNode.offsetWidth||320;
+  w=Math.max(w,40);h=Math.max(h,40);
+  cv.width=w*DPR;cv.height=h*DPR;cv.style.height=h+'px';
+  const c=cv.getContext('2d');c.setTransform(DPR,0,0,DPR,0,0);return{c:c,w:w,h:h};}
+const SV='http://www.w3.org/2000/svg';
+function E(t,a){const e=document.createElementNS(SV,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function TX(x,y,s,o){o=o||{};const t=E('text',{x:x,y:y,fill:o.fill||'#0b1b34',
+  'font-size':o.size||12,'font-weight':o.w||600,'text-anchor':o.anchor||'middle',
+  'font-family':'ui-sans-serif,system-ui,sans-serif'});t.textContent=s;return t;}
+const COL={pr:'#2f6bff',acc:'#ff8a00',gt:'#2ecc71',fp:'#ff5252',p5:'#7c3aed',
+  muted:'#61708a',ink:'#0b1b34',faint:'#9aa6bc'};
+
+function iou(a,b){
+  const ax2=a[0]+a[2],ay2=a[1]+a[3],bx2=b[0]+b[2],by2=b[1]+b[3];
+  const ix=Math.max(0,Math.min(ax2,bx2)-Math.max(a[0],b[0]));
+  const iy=Math.max(0,Math.min(ay2,by2)-Math.max(a[1],b[1]));
+  const inter=ix*iy,uni=a[2]*a[3]+b[2]*b[3]-inter;
+  return uni>0?inter/uni:0;
+}
+function rr(c,x,y,w,h,r){
+  r=Math.max(0,Math.min(r,w/2,h/2));
+  c.beginPath();c.moveTo(x+r,y);
+  c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);
+  c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();
+}
+
+/* ===== shared street scene (Acts 1,3,4) ===== */
+/* normalised [x,y,w,h] within the image area */
+const GT=[
+  {cls:'car',   b:[0.055,0.500,0.265,0.230]},
+  {cls:'car',   b:[0.545,0.455,0.220,0.185]},
+  {cls:'car',   b:[0.400,0.395,0.090,0.075]},
+  {cls:'person',b:[0.840,0.395,0.092,0.345]}
+];
+const PRED=[
+  {id:'P1',cls:'car',conf:0.91,b:[0.075,0.515,0.250,0.205]},
+  {id:'P2',cls:'car',conf:0.74,b:[0.520,0.490,0.220,0.165]},
+  {id:'P3',cls:'car',conf:0.63,b:[0.825,0.420,0.105,0.300]},
+  {id:'P4',cls:'car',conf:0.52,b:[0.100,0.470,0.235,0.210]},
+  {id:'P5',cls:'car',conf:0.38,b:[0.300,0.745,0.165,0.130]}
+];
+function drawCar(c,x,y,w,h){
+  c.fillStyle='#5c6c8d';rr(c,x,y+h*0.34,w,h*0.50,Math.min(7,h*0.16));c.fill();
+  c.fillStyle='#7080a3';rr(c,x+w*0.20,y,w*0.60,h*0.46,Math.min(6,h*0.12));c.fill();
+  c.fillStyle='#aebdd6';rr(c,x+w*0.27,y+h*0.09,w*0.46,h*0.27,3);c.fill();
+  c.fillStyle='#2a3242';
+  c.beginPath();c.arc(x+w*0.25,y+h*0.86,Math.max(2,h*0.15),0,7);c.fill();
+  c.beginPath();c.arc(x+w*0.75,y+h*0.86,Math.max(2,h*0.15),0,7);c.fill();
+  c.fillStyle='#ffd66b';
+  c.beginPath();c.arc(x+w*0.93,y+h*0.55,Math.max(1.4,w*0.05),0,7);c.fill();
+}
+function drawPerson(c,x,y,w,h){
+  c.fillStyle='#8a6aa0';
+  c.beginPath();c.arc(x+w*0.5,y+h*0.13,Math.max(2.4,Math.min(w,h)*0.17),0,7);c.fill();
+  rr(c,x+w*0.18,y+h*0.27,w*0.64,h*0.46,Math.min(5,w*0.18));c.fill();
+  c.fillStyle='#6f5285';
+  c.fillRect(x+w*0.30,y+h*0.68,w*0.16,h*0.32);
+  c.fillRect(x+w*0.54,y+h*0.68,w*0.16,h*0.32);
+}
+function scene(c,x,y,w,h){
+  c.save();
+  const sky=c.createLinearGradient(x,y,x,y+h*0.62);
+  sky.addColorStop(0,'#bcd6f5');sky.addColorStop(1,'#e1ecfb');
+  c.fillStyle=sky;c.fillRect(x,y,w,h*0.62);
+  c.fillStyle='#c9cfc0';c.fillRect(x,y+h*0.62,w,h*0.38);
+  c.fillStyle='#9aa18f';c.fillRect(x,y+h*0.66,w,h*0.30);
+  c.strokeStyle='#e9ecdf';c.lineWidth=2;c.setLineDash([11,9]);
+  c.beginPath();c.moveTo(x,y+h*0.815);c.lineTo(x+w,y+h*0.815);c.stroke();
+  c.setLineDash([]);
+  c.fillStyle='#f4c542';
+  c.beginPath();c.arc(x+w*0.13,y+h*0.16,Math.max(3,Math.min(w,h)*0.05),0,7);c.fill();
+  GT.forEach(g=>{const[bx,by,bw,bh]=g.b;
+    (g.cls==='car'?drawCar:drawPerson)(c,x+bx*w,y+by*h,bw*w,bh*h);});
+  c.restore();
+}
+function boxOn(c,ix,iy,iw,ih,b,col,o){
+  o=o||{};
+  const X=ix+b[0]*iw,Y=iy+b[1]*ih,W=b[2]*iw,H=b[3]*ih;
+  c.save();c.strokeStyle=col;c.lineWidth=o.lw||2.4;
+  if(o.dash)c.setLineDash(o.dash);
+  c.globalAlpha=o.alpha||1;c.strokeRect(X,Y,W,H);
+  c.setLineDash([]);c.globalAlpha=1;
+  if(o.label){
+    c.font='700 10px ui-sans-serif';
+    const tw=c.measureText(o.label).width+9;
+    let ly=Y-14;if(ly<iy+2)ly=Y+2;
+    c.fillStyle=col;c.fillRect(X,ly,tw,14);
+    c.fillStyle='#fff';c.textAlign='left';c.textBaseline='middle';
+    c.fillText(o.label,X+4.5,ly+8);
+    c.textBaseline='alphabetic';
+  }
+  c.restore();
+}
+/* greedy confidence-ordered match — car class only */
+function matchScene(thrIoU,thrConf){
+  const carGT=[];GT.forEach((g,i)=>{if(g.cls==='car')carGT.push({i:i,b:g.b});});
+  const preds=PRED.filter(p=>p.conf>=thrConf).slice().sort((a,b)=>b.conf-a.conf);
+  const claimed={},label={},pair={};
+  preds.forEach(p=>{
+    let best=-1,bv=0;
+    carGT.forEach(g=>{if(claimed[g.i])return;
+      const v=iou(p.b,g.b);if(v>bv){bv=v;best=g.i;}});
+    if(best>=0&&bv>=thrIoU){label[p.id]='TP';claimed[best]=true;pair[p.id]=best;}
+    else label[p.id]='FP';
+  });
+  let fn=0;carGT.forEach(g=>{if(!claimed[g.i])fn++;});
+  return {label:label,pair:pair,claimed:claimed,fn:fn,kept:preds};
+}
+
+/* ===================== ACT 1 ===================== */
+(function(){
+  const cv=document.getElementById('a1canvas');
+  let mode='raw';
+  function render(){
+    const{c,w,h}=fit(cv,300);c.clearRect(0,0,w,h);
+    const ix=12,iy=12,iw=w-24,ih=h-24;
+    scene(c,ix,iy,iw,ih);
+    c.strokeStyle='#d9e4ff';c.strokeRect(ix,iy,iw,ih);
+    if(mode==='raw'){
+      GT.forEach(g=>boxOn(c,ix,iy,iw,ih,g.b,COL.gt,{lw:2.6}));
+      PRED.forEach(p=>boxOn(c,ix,iy,iw,ih,p.b,COL.pr,{dash:[6,4],lw:2.2}));
+      c.font='700 12px ui-sans-serif';c.textAlign='left';
+      c.fillStyle=COL.gt;c.fillText('● 4 ground-truth boxes',ix+10,iy+ih-26);
+      c.fillStyle=COL.pr;c.fillText('▢ 5 predicted boxes — which pairs with which?',ix+10,iy+ih-10);
+      document.getElementById('a1note').innerHTML=
+        'Two lists of boxes, side by side. Nothing yet says which prediction means which object.';
+    }else{
+      const m=matchScene(0.5,0);
+      GT.forEach((g,i)=>{
+        if(g.cls!=='car')return;
+        if(!m.claimed[i])
+          boxOn(c,ix,iy,iw,ih,g.b,COL.gt,{dash:[5,4],lw:2.4,label:'FN · missed'});
+      });
+      const personMissed=GT[3].b;
+      boxOn(c,ix,iy,iw,ih,personMissed,COL.p5,{dash:[5,4],lw:2.4,label:'FN · person'});
+      PRED.forEach(p=>{
+        const tp=m.label[p.id]==='TP';
+        const col=tp?COL.gt:COL.fp;
+        if(tp){
+          const g=GT[m.pair[p.id]].b;
+          c.save();c.strokeStyle='#1a7d44';c.lineWidth=1.4;c.setLineDash([3,3]);
+          c.beginPath();
+          c.moveTo(ix+(p.b[0]+p.b[2]/2)*iw,iy+(p.b[1]+p.b[3]/2)*ih);
+          c.lineTo(ix+(g[0]+g[2]/2)*iw,iy+(g[1]+g[3]/2)*ih);
+          c.stroke();c.restore();
+        }
+        boxOn(c,ix,iy,iw,ih,p.b,col,{lw:2.6,label:(tp?'TP':'FP')+' · '+p.id});
+      });
+      document.getElementById('a1note').innerHTML=
+        '<b>2 TP</b> (matched), <b>3 FP</b> (false alarms — duplicate, empty space, wrong class), '+
+        '<b>2 FN</b> (a small car and the person, both missed). That is what the metric must score.';
+    }
+    document.getElementById('a1raw').className='btn'+(mode==='raw'?' pri':'');
+    document.getElementById('a1match').className='btn'+(mode==='match'?' pri':'');
+  }
+  document.getElementById('a1raw').onclick=()=>{mode='raw';render();};
+  document.getElementById('a1match').onclick=()=>{mode='match';render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== ACT 2 — IoU sliders ===================== */
+(function(){
+  const svg=document.getElementById('a2fig');
+  const PX=24,PY=24,PW=332,PH=312;
+  const GTB=[0.30,0.30,0.40,0.40];
+  let pb={x:0.40,y:0.40,w:0.40,h:0.40};
+  function toX(f){return PX+f*PW;}
+  function toY(f){return PY+f*PH;}
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    svg.appendChild(E('rect',{x:PX,y:PY,width:PW,height:PH,fill:'#fbfcff',
+      stroke:'#d9e4ff'}));
+    for(let k=1;k<10;k++){
+      svg.appendChild(E('line',{x1:PX+PW*k/10,y1:PY,x2:PX+PW*k/10,y2:PY+PH,
+        stroke:'#eef2fb','stroke-width':1}));
+      svg.appendChild(E('line',{x1:PX,y1:PY+PH*k/10,x2:PX+PW,y2:PY+PH*k/10,
+        stroke:'#eef2fb','stroke-width':1}));
+    }
+    const g=GTB,p=[pb.x,pb.y,pb.w,pb.h];
+    const ixA=Math.max(g[0],p[0]),iyA=Math.max(g[1],p[1]);
+    const ixB=Math.min(g[0]+g[2],p[0]+p[2]),iyB=Math.min(g[1]+g[3],p[1]+p[3]);
+    const hasI=(ixB>ixA&&iyB>iyA);
+    if(hasI)
+      svg.appendChild(E('rect',{x:toX(ixA),y:toY(iyA),
+        width:(ixB-ixA)*PW,height:(iyB-iyA)*PH,
+        fill:'rgba(46,204,113,.34)'}));
+    svg.appendChild(E('rect',{x:toX(g[0]),y:toY(g[1]),width:g[2]*PW,height:g[3]*PH,
+      fill:'none',stroke:COL.gt,'stroke-width':2.8}));
+    svg.appendChild(E('rect',{x:toX(p[0]),y:toY(p[1]),width:p[2]*PW,height:p[3]*PH,
+      fill:'rgba(47,107,255,.07)',stroke:COL.pr,'stroke-width':2.8,
+      'stroke-dasharray':'7 4'}));
+    svg.appendChild(TX(toX(g[0])+4,toY(g[1])-7,'ground truth',
+      {size:10.5,fill:COL.gt,w:800,anchor:'start'}));
+    svg.appendChild(TX(toX(p[0]+p[2])-4,toY(p[1]+p[3])+15,'prediction',
+      {size:10.5,fill:COL.pr,w:800,anchor:'end'}));
+    if(hasI){
+      const v=iou(g,p);
+      svg.appendChild(TX(toX((ixA+ixB)/2),toY((iyA+iyB)/2)+4,
+        'IoU '+v.toFixed(2),{size:11,fill:'#15703b',w:800}));
+    }
+    const inter=hasI?(ixB-ixA)*(iyB-iyA):0;
+    const gA=g[2]*g[3],pA=p[2]*p[3],uni=gA+pA-inter;
+    const v=uni>0?inter/uni:0;
+    const iel=document.getElementById('a2iou');
+    iel.textContent=v.toFixed(2);
+    iel.style.color=v>=0.75?'#2ecc71':v>=0.5?'#2f6bff':v>=0.25?'#ff8a00':'#ff5252';
+    document.getElementById('a2cov').textContent=(gA>0?Math.round(inter/gA*100):0)+'%';
+    document.getElementById('a2waste').textContent=
+      (pA>0?Math.round((pA-inter)/pA*100):0)+'%';
+  }
+  function buildSliders(){
+    const wrap=document.getElementById('a2sliders');wrap.innerHTML='';
+    [['x','left edge',0,0.7],['y','top edge',0,0.7],
+     ['w','width',0.05,0.7],['h','height',0.05,0.7]].forEach(([k,desc,mn,mx])=>{
+      const d=document.createElement('div');
+      d.innerHTML='<div class="ctl-label"><span><span class="mono" '+
+        'style="color:#2f6bff;font-weight:800">'+k+'</span> · '+desc+'</span>'+
+        '<b id="a2v_'+k+'" style="font-family:var(--mono)"></b></div>'+
+        '<input type="range" id="a2s_'+k+'" min="'+mn+'" max="'+mx+'" step="0.01" '+
+        'value="'+pb[k]+'">';
+      wrap.appendChild(d);
+    });
+    ['x','y','w','h'].forEach(k=>{
+      const s=document.getElementById('a2s_'+k);
+      s.oninput=e=>{pb[k]=+e.target.value;refresh();};
+    });
+  }
+  function refresh(){
+    render();
+    ['x','y','w','h'].forEach(k=>{
+      document.getElementById('a2v_'+k).textContent=pb[k].toFixed(2);});
+  }
+  const PRE={
+    'Perfect':{x:0.30,y:0.30,w:0.40,h:0.40},
+    'Slightly off':{x:0.36,y:0.37,w:0.40,h:0.40},
+    'Shifted':{x:0.52,y:0.30,w:0.40,h:0.40},
+    'Swallow':{x:0.04,y:0.04,w:0.70,h:0.70},
+    'No overlap':{x:0.04,y:0.04,w:0.18,h:0.16}
+  };
+  const pc=document.getElementById('a2presets');
+  Object.keys(PRE).forEach((nm,idx)=>{
+    const b=document.createElement('button');
+    b.className='btn sm'+(idx===0?' on':'');
+    b.textContent=nm;
+    b.onclick=()=>{
+      pb=Object.assign({},PRE[nm]);
+      [...pc.children].forEach(x=>x.className='btn sm');
+      b.className='btn sm on';
+      buildSliders();refresh();
+    };
+    pc.appendChild(b);
+  });
+  pb=Object.assign({},PRE['Perfect']);
+  buildSliders();refresh();
+})();
+
+/* ===================== ACT 3 — IoU threshold ===================== */
+(function(){
+  const cv=document.getElementById('a3canvas');
+  let thr=0.5;
+  function render(){
+    const{c,w,h}=fit(cv,320);c.clearRect(0,0,w,h);
+    const ix=12,iy=12,iw=w-24,ih=h-24;
+    scene(c,ix,iy,iw,ih);
+    c.strokeStyle='#d9e4ff';c.strokeRect(ix,iy,iw,ih);
+    const m=matchScene(thr,0);
+    GT.forEach((g,i)=>{
+      if(g.cls==='car'&&!m.claimed[i])
+        boxOn(c,ix,iy,iw,ih,g.b,COL.gt,{dash:[5,4],lw:2.4,label:'FN'});
+    });
+    boxOn(c,ix,iy,iw,ih,GT[3].b,COL.p5,{dash:[5,4],lw:2,alpha:0.85,
+      label:'person · other class'});
+    PRED.forEach(p=>{
+      const tp=m.label[p.id]==='TP';
+      boxOn(c,ix,iy,iw,ih,p.b,tp?COL.gt:COL.fp,
+        {lw:2.6,label:(tp?'TP':'FP')+' '+p.id});
+    });
+    let tp=0,fp=0;PRED.forEach(p=>{m.label[p.id]==='TP'?tp++:fp++;});
+    document.getElementById('a3tp').textContent=tp;
+    document.getElementById('a3fp').textContent=fp;
+    document.getElementById('a3fn').textContent=m.fn;
+    document.getElementById('a3thr').textContent=thr.toFixed(2);
+    let msg='';
+    if(thr<=0.5)msg='At a lenient threshold, every roughly-placed box can still hit a car.';
+    else if(thr<=0.7)msg='Tightening the threshold: <b>P2</b> fits its car only loosely, '+
+      'so it has flipped to a false positive.';
+    else msg='Very strict — even well-placed boxes fail. Almost everything is now FP or FN.';
+    document.getElementById('a3note').innerHTML=msg+
+      ' &nbsp;<b>P3</b> is the car-labelled box on the person (always FP for the car class); '+
+      '<b>P4</b> is a duplicate on the left car.';
+  }
+  document.getElementById('a3slider').oninput=e=>{thr=+e.target.value;render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== ACT 4 — confidence threshold ===================== */
+(function(){
+  const cv=document.getElementById('a4canvas');
+  let thr=0;
+  function render(){
+    const{c,w,h}=fit(cv,320);c.clearRect(0,0,w,h);
+    const ix=12,iy=12,iw=w-24,ih=h-24;
+    scene(c,ix,iy,iw,ih);
+    c.strokeStyle='#d9e4ff';c.strokeRect(ix,iy,iw,ih);
+    const m=matchScene(0.5,thr);
+    GT.forEach((g,i)=>{
+      if(g.cls==='car'&&!m.claimed[i])
+        boxOn(c,ix,iy,iw,ih,g.b,COL.gt,{dash:[5,4],lw:2.2,label:'FN'});
+    });
+    PRED.forEach(p=>{
+      const kept=p.conf>=thr;
+      if(!kept){
+        boxOn(c,ix,iy,iw,ih,p.b,'#b9c2d4',{dash:[3,3],lw:1.6,alpha:0.6,
+          label:p.id+' ·cut'});
+        return;
+      }
+      const tp=m.label[p.id]==='TP';
+      boxOn(c,ix,iy,iw,ih,p.b,tp?COL.gt:COL.fp,
+        {lw:2.6,label:(tp?'TP':'FP')+' '+p.id+' ·'+p.conf.toFixed(2)});
+    });
+    let tp=0,fp=0;m.kept.forEach(p=>{m.label[p.id]==='TP'?tp++:fp++;});
+    const prec=(tp+fp)>0?tp/(tp+fp):1;
+    const totGT=3,rec=tp/totGT;
+    document.getElementById('a4thr').textContent=thr.toFixed(2);
+    document.getElementById('a4pv').textContent=prec.toFixed(2);
+    document.getElementById('a4rv').textContent=rec.toFixed(2);
+    document.getElementById('a4pbar').style.width=(prec*100)+'%';
+    document.getElementById('a4rbar').style.width=(rec*100)+'%';
+    document.getElementById('a4pf').textContent='TP '+tp+' / (TP '+tp+' + FP '+fp+')';
+    document.getElementById('a4rf').textContent='TP '+tp+' / '+totGT+' car ground-truth';
+    let msg;
+    if(thr<=0.01)msg='Threshold 0 — every box kept. Recall is as high as it gets, but the '+
+      '3 false alarms hold precision down.';
+    else if(thr<0.64)msg='Raising the threshold drops false positives first — precision climbs '+
+      'while recall stays put.';
+    else if(thr<0.75)msg='Now true positives are being cut too: only the surest box survives, '+
+      'so recall falls.';
+    else msg='Almost nothing clears the bar — high precision on what is left, but most objects '+
+      'are missed.';
+    document.getElementById('a4note').innerHTML=msg;
+  }
+  const PRE=[['Keep all',0],['Balanced',0.6],['Strict',0.8]];
+  const pc=document.getElementById('a4presets');
+  PRE.forEach(([lab,val],i)=>{
+    const b=document.createElement('button');
+    b.className='btn sm'+(i===0?' on':'');
+    b.textContent=lab;
+    b.onclick=()=>{thr=val;document.getElementById('a4slider').value=val;
+      [...pc.children].forEach(x=>x.className='btn sm');b.className='btn sm on';render();};
+    pc.appendChild(b);
+  });
+  document.getElementById('a4slider').oninput=e=>{thr=+e.target.value;
+    [...pc.children].forEach(x=>x.className='btn sm');render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== shared dataset pool (Acts 5,6,7) ===================== */
+const POOL=[
+  {conf:0.98,iou:0.96},{conf:0.95,iou:0.91},{conf:0.93,iou:0.88},
+  {conf:0.89,iou:0.34},{conf:0.87,iou:0.82},{conf:0.84,iou:0.76},
+  {conf:0.80,iou:0.12},{conf:0.78,iou:0.71},{conf:0.73,iou:0.64},
+  {conf:0.68,iou:0.41},{conf:0.61,iou:0.57},{conf:0.55,iou:0.08},
+  {conf:0.50,iou:0.29},{conf:0.42,iou:0.00},{conf:0.31,iou:0.19}
+];
+const POOL_GT=8;
+function labelPool(tau){return POOL.map(p=>({conf:p.conf,iou:p.iou,tp:p.iou>=tau}));}
+function prCurve(lab,totGT){
+  let tp=0,fp=0;const pts=[];
+  lab.forEach(p=>{
+    if(p.tp)tp++;else fp++;
+    pts.push({r:tp/totGT,p:tp/(tp+fp),tp:tp,fp:fp});
+  });
+  return pts;
+}
+function envelope(pts){
+  const env=[];let mx=0;
+  for(let i=pts.length-1;i>=0;i--){mx=Math.max(mx,pts[i].p);
+    env[i]={r:pts[i].r,p:mx};}
+  return env;
+}
+function apOf(pts){
+  const env=envelope(pts);
+  let ap=0,prev=0;
+  for(let i=0;i<env.length;i++){ap+=(env[i].r-prev)*env[i].p;prev=env[i].r;}
+  return ap;
+}
+/* shared PR plot frame */
+function prFrame(svg,x0,y0,W,H){
+  svg.appendChild(E('rect',{x:x0,y:y0,width:W,height:H,fill:'#fbfcff',
+    stroke:'#d9e4ff'}));
+  for(let k=1;k<5;k++){
+    svg.appendChild(E('line',{x1:x0+W*k/5,y1:y0,x2:x0+W*k/5,y2:y0+H,
+      stroke:'#eef2fb','stroke-width':1}));
+    svg.appendChild(E('line',{x1:x0,y1:y0+H*k/5,x2:x0+W,y2:y0+H*k/5,
+      stroke:'#eef2fb','stroke-width':1}));
+  }
+  for(let k=0;k<=5;k++){
+    svg.appendChild(TX(x0+W*k/5,y0+H+15,(k/5).toFixed(1),{size:9,fill:COL.faint}));
+    svg.appendChild(TX(x0-12,y0+H-H*k/5+3,(k/5).toFixed(1),{size:9,fill:COL.faint}));
+  }
+  svg.appendChild(TX(x0+W/2,y0+H+32,'Recall',{size:11,fill:COL.muted,w:700}));
+  const yl=TX(x0-30,y0+H/2,'Precision',{size:11,fill:COL.muted,w:700});
+  yl.setAttribute('transform','rotate(-90 '+(x0-30)+' '+(y0+H/2)+')');
+  svg.appendChild(yl);
+}
+
+/* ===================== ACT 5 — PR pool diagram ===================== */
+(function(){
+  const svg=document.getElementById('a5pool');
+  ['Image 1','Image 2','Image 3'].forEach((lab,i)=>{
+    const y=18+i*56,col=[COL.pr,COL.p5,COL.acc][i];
+    svg.appendChild(E('rect',{x:40,y:y,width:150,height:46,rx:7,fill:'#fff',
+      stroke:col,'stroke-width':1.7}));
+    svg.appendChild(E('rect',{x:48,y:y+7,width:134,height:20,fill:'#cfe0f6'}));
+    svg.appendChild(E('rect',{x:48,y:y+25,width:134,height:14,fill:'#c8d2bf'}));
+    svg.appendChild(TX(28,y+27,(i+1),{size:13,fill:col,w:800,anchor:'end'}));
+    svg.appendChild(E('path',{d:'M 196 '+(y+23)+' L 250 95',fill:'none',
+      stroke:'#9aaac6','stroke-width':1.8,'marker-end':'url(#a5m)'}));
+  });
+  const defs=E('defs',{});
+  const mk=E('marker',{id:'a5m',markerWidth:8,markerHeight:8,refX:6.5,refY:3,
+    orient:'auto'});
+  mk.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(mk);svg.insertBefore(defs,svg.firstChild);
+  svg.appendChild(E('rect',{x:262,y:64,width:150,height:62,rx:9,fill:'#e7eeff',
+    stroke:'#2f6bff','stroke-width':1.8}));
+  svg.appendChild(TX(337,90,'ONE POOL',{size:13,fill:'#2f6bff',w:800}));
+  svg.appendChild(TX(337,108,'all car predictions',{size:9.5,fill:COL.muted}));
+  svg.appendChild(E('path',{d:'M 414 95 L 470 95',fill:'none',stroke:'#9aaac6',
+    'stroke-width':2,'marker-end':'url(#a5m)'}));
+  svg.appendChild(TX(478,80,'sort by',{size:10,fill:COL.muted,anchor:'start'}));
+  svg.appendChild(TX(478,94,'confidence ↓',{size:10.5,fill:COL.ink,w:800,anchor:'start'}));
+  const rx=590,rw=384;
+  svg.appendChild(E('rect',{x:rx,y:70,width:rw,height:50,rx:8,fill:'#fff',
+    stroke:'#d9e4ff'}));
+  for(let k=0;k<15;k++){
+    const bx=rx+12+k*(rw-24)/15;
+    svg.appendChild(E('rect',{x:bx,y:80,width:(rw-24)/15-3,height:30,rx:3,
+      fill:k<3?'#dff3e6':k<8?'#eef3ff':'#f3f5fa',
+      stroke:'#d9e4ff','stroke-width':0.8}));
+  }
+  svg.appendChild(TX(rx+rw/2,62,'ranked list — every image, one class',
+    {size:10,fill:COL.muted,w:700}));
+  svg.appendChild(TX(rx+14,103,'high',{size:8.5,fill:'#1a7d44',w:700,anchor:'start'}));
+  svg.appendChild(TX(rx+rw-14,103,'low',{size:8.5,fill:COL.faint,w:700,anchor:'end'}));
+  svg.appendChild(TX(rx+rw/2,138,'8 ground-truth cars across the 3 images',
+    {size:9.5,fill:COL.muted}));
+})();
+
+/* ===================== ACT 5 — PR curve step-through ===================== */
+(function(){
+  const svg=document.getElementById('a5curve');
+  const lab=labelPool(0.5);
+  const full=prCurve(lab,POOL_GT);
+  let step=1;
+  function chips(){
+    const wrap=document.getElementById('a5chips');wrap.innerHTML='';
+    lab.forEach((p,i)=>{
+      const s=document.createElement('span');
+      s.className=(p.tp?'tp':'fp')+(i===step-1?' cur':'')+(i>=step?' dim':'');
+      s.textContent=p.conf.toFixed(2);
+      wrap.appendChild(s);
+    });
+  }
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const x0=46,y0=20,W=336,H=320;
+    prFrame(svg,x0,y0,W,H);
+    const xf=r=>x0+r*W,yf=p=>y0+(1-p)*H;
+    let d='';
+    for(let i=0;i<step;i++){
+      const px=xf(full[i].r),py=yf(full[i].p);
+      d+=(i===0?'M ':'L ')+px+' '+py+' ';
+    }
+    if(step>1)svg.appendChild(E('path',{d:d,fill:'none',stroke:'#2f6bff',
+      'stroke-width':2.4,'stroke-linejoin':'round'}));
+    for(let i=0;i<step;i++){
+      const cur=(i===step-1);
+      svg.appendChild(E('circle',{cx:xf(full[i].r),cy:yf(full[i].p),
+        r:cur?5.4:3.4,fill:lab[i].tp?COL.gt:COL.fp,
+        stroke:'#fff','stroke-width':cur?2:1.2}));
+    }
+    const c=full[step-1];
+    document.getElementById('a5p').textContent=c.p.toFixed(2);
+    document.getElementById('a5r').textContent=c.r.toFixed(2);
+    document.getElementById('a5calc').innerHTML=
+      'step '+step+': '+(lab[step-1].tp?'a TRUE positive':'a FALSE positive')+
+      ' &nbsp;→&nbsp; P = '+c.tp+'/'+(c.tp+c.fp)+' = '+c.p.toFixed(2)+
+      ' &nbsp;·&nbsp; R = '+c.tp+'/'+POOL_GT+' = '+c.r.toFixed(2);
+    document.getElementById('a5step').textContent=step+' / '+lab.length;
+    document.getElementById('a5fill').style.width=(step/lab.length*100)+'%';
+    document.getElementById('a5prev').disabled=step<=1;
+    document.getElementById('a5next').disabled=step>=lab.length;
+    chips();
+  }
+  document.getElementById('a5next').onclick=()=>{if(step<lab.length){step++;render();}};
+  document.getElementById('a5prev').onclick=()=>{if(step>1){step--;render();}};
+  document.getElementById('a5all').onclick=()=>{step=lab.length;render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== ACT 6 — AP / envelope ===================== */
+(function(){
+  const svg=document.getElementById('a6curve');
+  const lab=labelPool(0.5);
+  const pts=prCurve(lab,POOL_GT);
+  let envOn=false;
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const x0=46,y0=20,W=336,H=320;
+    const xf=r=>x0+r*W,yf=p=>y0+(1-p)*H;
+    /* shaded area */
+    const src=envOn?envelope(pts):pts;
+    let area='M '+xf(0)+' '+yf(src[0].p)+' ';
+    let prevR=0;
+    src.forEach(pt=>{
+      area+='L '+xf(prevR)+' '+yf(pt.p)+' L '+xf(pt.r)+' '+yf(pt.p)+' ';
+      prevR=pt.r;
+    });
+    area+='L '+xf(prevR)+' '+yf(0)+' L '+xf(0)+' '+yf(0)+' Z';
+    svg.appendChild(E('path',{d:area,fill:'rgba(47,107,255,.16)',stroke:'none'}));
+    prFrame(svg,x0,y0,W,H);
+    svg.appendChild(E('path',{d:area,fill:'rgba(47,107,255,.13)',stroke:'none'}));
+    /* raw curve */
+    let d='';pts.forEach((pt,i)=>{d+=(i===0?'M ':'L ')+xf(pt.r)+' '+yf(pt.p)+' ';});
+    svg.appendChild(E('path',{d:d,fill:'none',
+      stroke:envOn?'#b9c6e6':'#2f6bff','stroke-width':envOn?1.6:2.4,
+      'stroke-linejoin':'round'}));
+    /* envelope */
+    if(envOn){
+      const env=envelope(pts);
+      let e='M '+xf(0)+' '+yf(env[0].p)+' ';
+      let pr=0;
+      env.forEach(pt=>{e+='L '+xf(pr)+' '+yf(pt.p)+' L '+xf(pt.r)+' '+yf(pt.p)+' ';
+        pr=pt.r;});
+      svg.appendChild(E('path',{d:e,fill:'none',stroke:'#2f6bff','stroke-width':2.6,
+        'stroke-linejoin':'round'}));
+    }
+    pts.forEach((pt,i)=>{
+      svg.appendChild(E('circle',{cx:xf(pt.r),cy:yf(pt.p),r:3.2,
+        fill:lab[i].tp?COL.gt:COL.fp,stroke:'#fff','stroke-width':1.1}));
+    });
+    const ap=apOf(pts);
+    document.getElementById('a6ap').textContent=ap.toFixed(3);
+    document.getElementById('a6raw').className='btn'+(envOn?'':' pri');
+    document.getElementById('a6env').className='btn'+(envOn?' pri':'');
+  }
+  document.getElementById('a6raw').onclick=()=>{envOn=false;render();};
+  document.getElementById('a6env').onclick=()=>{envOn=true;render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== ACT 6 — multi-class mAP ===================== */
+(function(){
+  const svg=document.getElementById('a6map');
+  const CLS=[
+    {n:'car',   col:'#2f6bff',gt:POOL_GT,list:POOL.map(p=>p.iou>=0.5)},
+    {n:'person',col:'#ff8a00',gt:5,
+      list:[0.90,0.84,0.20,0.71,0.66,0.10,0.55].map(v=>v>=0.5)},
+    {n:'bike',  col:'#7c3aed',gt:4,
+      list:[0.78,0.30,0.60,0.15,0.52,0.05].map(v=>v>=0.5)}
+  ];
+  function curveFor(c){
+    let tp=0,fp=0;const pts=[];
+    c.list.forEach(isTP=>{if(isTP)tp++;else fp++;
+      pts.push({r:tp/c.gt,p:tp/(tp+fp)});});
+    return pts;
+  }
+  const aps=[];
+  CLS.forEach((c,i)=>{
+    const x0=40+i*235,y0=24,W=170,H=150;
+    svg.appendChild(E('rect',{x:x0,y:y0,width:W,height:H,fill:'#fbfcff',
+      stroke:'#d9e4ff'}));
+    for(let k=1;k<4;k++){
+      svg.appendChild(E('line',{x1:x0+W*k/4,y1:y0,x2:x0+W*k/4,y2:y0+H,
+        stroke:'#eef2fb','stroke-width':1}));
+      svg.appendChild(E('line',{x1:x0,y1:y0+H*k/4,x2:x0+W,y2:y0+H*k/4,
+        stroke:'#eef2fb','stroke-width':1}));
+    }
+    const pts=curveFor(c);
+    const xf=r=>x0+r*W,yf=p=>y0+(1-p)*H;
+    let area='M '+xf(0)+' '+yf(pts[0].p)+' ',pr=0;
+    pts.forEach(pt=>{area+='L '+xf(pr)+' '+yf(pt.p)+' L '+xf(pt.r)+' '+yf(pt.p)+' ';
+      pr=pt.r;});
+    area+='L '+xf(pr)+' '+yf(0)+' L '+xf(0)+' '+yf(0)+' Z';
+    svg.appendChild(E('path',{d:area,fill:c.col,'fill-opacity':0.13}));
+    let d='';pts.forEach((pt,k)=>{d+=(k===0?'M ':'L ')+xf(pt.r)+' '+yf(pt.p)+' ';});
+    svg.appendChild(E('path',{d:d,fill:'none',stroke:c.col,'stroke-width':2.2,
+      'stroke-linejoin':'round'}));
+    let tp=0,fp=0,ap=0,prevR=0;
+    const env=[];let mx=0;
+    for(let k=pts.length-1;k>=0;k--){mx=Math.max(mx,pts[k].p);env[k]=mx;}
+    pts.forEach((pt,k)=>{ap+=(pt.r-prevR)*env[k];prevR=pt.r;});
+    aps.push(ap);
+    svg.appendChild(TX(x0+W/2,y0-8,c.n,{size:12,fill:c.col,w:800}));
+    svg.appendChild(TX(x0+W/2,y0+H+22,'AP = '+ap.toFixed(2),
+      {size:12.5,fill:c.col,w:800}));
+  });
+  const mAP=aps.reduce((a,b)=>a+b,0)/aps.length;
+  const bx=40+3*235-10,bw=200;
+  svg.appendChild(E('rect',{x:bx,y:70,width:bw,height:96,rx:11,fill:'#0b1b34'}));
+  svg.appendChild(TX(bx+bw/2,98,'mAP',{size:13,fill:'#9aa6bc',w:800}));
+  svg.appendChild(TX(bx+bw/2,134,mAP.toFixed(3),{size:34,fill:'#fff',w:800}));
+  svg.appendChild(TX(bx+bw/2,154,'mean of the 3 class APs',{size:9.5,fill:'#9aa6bc'}));
+  svg.appendChild(TX(bx+bw/2,210,'('+aps.map(a=>a.toFixed(2)).join(' + ')+') ÷ 3',
+    {size:10.5,fill:COL.muted,w:600}));
+})();
+
+/* ===================== ACT 7 — IoU sweep ===================== */
+(function(){
+  const svg=document.getElementById('a7bars');
+  const TAUS=[];for(let t=0.5;t<0.951;t+=0.05)TAUS.push(Math.round(t*100)/100);
+  const apByTau=TAUS.map(t=>apOf(prCurve(labelPool(t),POOL_GT)));
+  const mAP5095=apByTau.reduce((a,b)=>a+b,0)/apByTau.length;
+  let tau=0.5;
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const x0=70,y0=24,W=880,H=210;
+    svg.appendChild(E('line',{x1:x0,y1:y0+H,x2:x0+W,y2:y0+H,
+      stroke:'#cdd7e6','stroke-width':1.4}));
+    for(let k=0;k<=5;k++){
+      const gy=y0+H-H*(k/5);
+      svg.appendChild(E('line',{x1:x0,y1:gy,x2:x0+W,y2:gy,
+        stroke:'#eef2fb','stroke-width':1}));
+      svg.appendChild(TX(x0-10,gy+3,(k/5).toFixed(1),{size:9,fill:COL.faint,
+        anchor:'end'}));
+    }
+    /* mean line */
+    const my=y0+H-H*mAP5095;
+    svg.appendChild(E('line',{x1:x0,y1:my,x2:x0+W,y2:my,stroke:COL.acc,
+      'stroke-width':1.8,'stroke-dasharray':'7 4'}));
+    svg.appendChild(TX(x0+W+4,my+3,'mAP',{size:9.5,fill:COL.acc,w:800,
+      anchor:'start'}));
+    const bw=W/TAUS.length;
+    TAUS.forEach((t,i)=>{
+      const ap=apByTau[i],bh=ap*H,bx=x0+i*bw+bw*0.16,bwid=bw*0.68;
+      const cur=Math.abs(t-tau)<0.001;
+      svg.appendChild(E('rect',{x:bx,y:y0+H-bh,width:bwid,height:bh,rx:3,
+        fill:cur?COL.pr:'#c3d2f2',stroke:cur?'#1e56f0':'none',
+        'stroke-width':cur?1.6:0}));
+      svg.appendChild(TX(bx+bwid/2,y0+H-bh-6,ap.toFixed(2),
+        {size:9.5,fill:cur?COL.pr:COL.muted,w:cur?800:600}));
+      svg.appendChild(TX(bx+bwid/2,y0+H+16,t.toFixed(2),
+        {size:9.5,fill:cur?COL.ink:COL.faint,w:cur?800:600}));
+    });
+    svg.appendChild(TX(x0+W/2,y0+H+34,'IoU threshold',
+      {size:11,fill:COL.muted,w:700}));
+    const yl=TX(22,y0+H/2,'AP at that IoU',{size:11,fill:COL.muted,w:700});
+    yl.setAttribute('transform','rotate(-90 22 '+(y0+H/2)+')');
+    svg.appendChild(yl);
+    svg.appendChild(TX(x0+W/2,16,
+      'AP at 10 IoU thresholds — their mean (orange line) is mAP@0.5:0.95',
+      {size:10.5,fill:COL.faint,w:700}));
+    const idx=TAUS.indexOf(tau);
+    const ap=apByTau[idx];
+    let tp=0;POOL.forEach(p=>{if(p.iou>=tau)tp++;});
+    document.getElementById('a7thr').textContent=tau.toFixed(2);
+    document.getElementById('a7ap').textContent=ap.toFixed(3);
+    document.getElementById('a7tp').textContent=tp+' / '+POOL_GT;
+    document.getElementById('a7map').textContent=mAP5095.toFixed(3);
+    let msg;
+    if(tau<=0.5)msg='At IoU 0.5 — the lenient end. This single value is <b>mAP@0.5</b>. '+
+      'All 8 well-placed boxes count.';
+    else if(tau<=0.75)msg='Stricter: boxes that fit only loosely no longer qualify, so true '+
+      'positives drop and AP falls.';
+    else msg='Near IoU 0.95 — only near-perfect boxes survive. AP is at its lowest; this is '+
+      'what punishes loose localization.';
+    document.getElementById('a7note').innerHTML=msg+
+      ' &nbsp;<b>mAP@0.5:0.95</b> is the average height of all ten bars.';
+  }
+  document.getElementById('a7slider').oninput=e=>{
+    tau=Math.round(+e.target.value*100)/100;render();};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== SUMMARY ===================== */
+(function(){
+  const svg=document.getElementById('sumFig');
+  const defs=E('defs',{});
+  const m=E('marker',{id:'sm',markerWidth:8,markerHeight:8,refX:6.5,refY:3,
+    orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(m);svg.appendChild(defs);
+  const nodes=[
+    {x:74, lab:'Boxes',sub:'2 unaligned lists',col:'#61708a'},
+    {x:226,lab:'IoU',sub:'overlap score',col:'#2ecc71'},
+    {x:378,lab:'Match',sub:'TP · FP · FN',col:'#ff8a00'},
+    {x:530,lab:'P & R',sub:'precision/recall',col:'#2f6bff'},
+    {x:686,lab:'PR curve',sub:'sweep confidence',col:'#2f6bff'},
+    {x:842,lab:'AP',sub:'area under curve',col:'#7c3aed'},
+    {x:962,lab:'mAP',sub:'mean / class',col:'#2ecc71'}
+  ];
+  const y=84,bw=120,bh=54;
+  nodes.forEach((n,i)=>{
+    if(i>0)svg.appendChild(E('line',{x1:nodes[i-1].x+bw/2+3,y1:y,
+      x2:n.x-bw/2-3,y2:y,stroke:'#9aaac6','stroke-width':2,
+      'marker-end':'url(#sm)'}));
+    svg.appendChild(E('rect',{x:n.x-bw/2,y:y-bh/2,width:bw,height:bh,rx:11,
+      fill:'#fff',stroke:n.col,'stroke-width':2}));
+    svg.appendChild(TX(n.x,y-3,n.lab,{size:13.5,fill:n.col,w:800}));
+    svg.appendChild(TX(n.x,y+15,n.sub,{size:9,fill:'#61708a'}));
+  });
+  svg.appendChild(E('rect',{x:150,y:150,width:430,height:30,rx:8,
+    fill:'#fff1d6',stroke:'#ffd98a'}));
+  svg.appendChild(TX(365,169,'CONFIDENCE THRESHOLD — sweeps to draw the PR curve',
+    {size:10.5,fill:'#a86b00',w:700}));
+  svg.appendChild(E('rect',{x:600,y:150,width:402,height:30,rx:8,
+    fill:'#dff3e6',stroke:'#a9e6c0'}));
+  svg.appendChild(TX(801,169,'IoU THRESHOLD — sweeps to give mAP@0.5:0.95',
+    {size:10.5,fill:'#1a7d44',w:700}));
+  svg.appendChild(TX(510,206,
+    'Two different thresholds, two different sweeps — together they define the full metric.',
+    {size:11,fill:'#8b97ac'}));
+})();
+
+/* nav scroll-spy */
+(function(){
+  const links=document.querySelectorAll('.nl');
+  const secs=[...document.querySelectorAll('section.act')];
+  function spy(){let cur=secs[0].id;
+    secs.forEach(s=>{if(scrollY>=s.offsetTop-100)cur=s.id;});
+    links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+cur));}
+  addEventListener('scroll',spy,{passive:true});spy();
+})();
+addEventListener('load',()=>{try{dispatchEvent(new Event('resize'));}catch(e){}});
+</script>
+</body>
+</html>

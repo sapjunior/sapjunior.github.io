@@ -1,0 +1,2198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How YOLO26 Works [2110433 Computer Vision]</title>
+<style>
+  :root{
+    --bg:#f7faff;--bg2:#eef4ff;--card:#ffffff;--card2:#f1f6ff;
+    --text:#0b1b34;--muted:#61708a;--faint:#8b97ac;
+    --primary:#2f6bff;--primary2:#1e56f0;--accent:#ff8a00;
+    --success:#2ecc71;--danger:#ff5252;--warning:#f7b731;
+    --border:#d9e4ff;--shadow:0 10px 30px rgba(13,30,80,.10);
+    --shadow-sm:0 4px 14px rgba(13,30,80,.07);
+    --r-lg:16px;--r:12px;--r-sm:10px;
+    --p3:#2f6bff;--p4:#ff8a00;--p5:#7c3aed;--gt:#2ecc71;
+    --mono:'SF Mono',ui-monospace,Menlo,Consolas,'Courier New',monospace;
+    --sans:ui-sans-serif,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,'Noto Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:var(--sans);background:linear-gradient(180deg,var(--bg),var(--bg2));
+    color:var(--text);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1500px;margin:0 auto;padding:0 26px}
+  .mono{font-family:var(--mono)}
+
+  header.hero{padding:54px 0 26px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--primary);
+    background:#e7eeff;border:1px solid var(--border);padding:6px 12px;border-radius:999px}
+  h1{font-size:clamp(30px,5.4vw,50px);font-weight:800;line-height:1.1;letter-spacing:-.02em;
+    margin:18px 0 0}
+  h1 .hl{color:var(--primary)}
+  .hero-sub{margin-top:14px;max-width:640px;color:var(--muted);font-size:16px}
+  .hero-meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}
+  .pill{font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--border);color:var(--muted)}
+  .pill b{color:var(--text)}
+
+  nav{position:sticky;top:0;z-index:40;background:rgba(247,250,255,.92);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  nav .wrap{display:flex;gap:3px;overflow-x:auto;padding:8px 22px}
+  nav a{font-size:12px;font-weight:600;text-decoration:none;color:var(--muted);
+    padding:8px 10px;border-radius:8px;white-space:nowrap;transition:.15s}
+  nav a:hover{color:var(--text);background:var(--card2)}
+  nav a.on{color:#fff;background:var(--primary)}
+
+  section.act{padding:46px 0}
+  section.act + section.act{border-top:1px solid var(--border)}
+  .act-head{display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap}
+  .act-num{font-family:var(--mono);font-weight:700;font-size:14px;color:#fff;
+    background:linear-gradient(145deg,var(--primary),var(--primary2));
+    width:42px;height:42px;border-radius:11px;display:grid;place-items:center;flex-shrink:0;
+    box-shadow:0 8px 18px rgba(47,107,255,.28)}
+  h2{font-size:clamp(21px,3.5vw,29px);font-weight:800;letter-spacing:-.015em}
+  .phase{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:4px 9px;border-radius:6px}
+  .phase.train{background:#fff1d6;color:#a86b00;border:1px solid #ffd98a}
+  .phase.infer{background:#dff3e6;color:#1a7d44;border:1px solid #a9e6c0}
+  .act-lede{font-size:16.5px;color:var(--muted);margin:12px 0 18px;max-width:770px}
+  h3{font-size:17px;font-weight:700;margin:24px 0 8px}
+  p{margin:10px 0;color:#33425e}
+  p strong{color:var(--text);font-weight:700}
+  .acc-p3{color:var(--p3);font-weight:700}.acc-p4{color:var(--p4);font-weight:700}
+  .acc-p5{color:var(--p5);font-weight:700}.acc-gt{color:var(--gt);font-weight:700}
+
+  ul.bul{list-style:none;margin:12px 0;display:flex;flex-direction:column;gap:8px}
+  ul.bul li{padding-left:24px;position:relative;color:#33425e;font-size:15px}
+  ul.bul li::before{content:"";position:absolute;left:5px;top:9px;width:7px;height:7px;
+    border-radius:2px;background:var(--primary)}
+  ul.bul li strong{color:var(--text)}
+
+  .card{background:linear-gradient(180deg,var(--card),var(--card2));
+    border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+  .viz{margin:18px 0;overflow:hidden}
+  .viz-pad{padding:18px}
+  .viz-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:12px 16px;border-top:1px solid var(--border);background:var(--card2)}
+  .viz-cap{font-size:12.5px;color:var(--muted)}
+  canvas,svg.fig{display:block;width:100%;height:auto;max-width:1280px;margin-inline:auto}
+  #ltrbFig{max-width:100%}
+
+  button.btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:9px 12px;
+    border-radius:9px;border:1px solid var(--border);background:#fff;color:var(--text);
+    cursor:pointer;transition:.13s;white-space:nowrap}
+  button.btn:hover{background:var(--card2)}
+  button.btn.pri{background:linear-gradient(145deg,var(--primary),var(--primary2));
+    color:#fff;border-color:var(--primary);box-shadow:0 6px 14px rgba(47,107,255,.25)}
+  button.btn.pri:hover{filter:brightness(1.06)}
+  button.btn:disabled{opacity:.45;cursor:not-allowed}
+  button.btn.on{color:#fff;font-weight:700;background:var(--primary);border-color:var(--primary)}
+  button.btn.sm{padding:7px 10px;font-size:12px}
+  .track{flex:1;min-width:70px;height:6px;background:#e3ebfb;border-radius:999px;overflow:hidden}
+  .track>i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));
+    width:0%;transition:width .3s}
+  .ctl-label{font-size:12.5px;font-weight:600;color:var(--muted);
+    display:flex;justify-content:space-between}
+  .ctl-label b{color:var(--primary);font-size:14px}
+
+  .takeaway{display:flex;gap:12px;align-items:flex-start;margin:20px 0 4px;
+    background:#e7eeff;border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+  .takeaway .ico{width:26px;height:26px;border-radius:7px;flex-shrink:0;
+    background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px}
+  .takeaway .t{font-size:14.5px}
+  .takeaway .t b{color:var(--primary)}
+  .v26{border-left:3px solid var(--accent);background:#fff7ec;border-radius:0 var(--r) var(--r) 0;
+    padding:12px 16px;margin:16px 0}
+  .v26 .tag{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--accent)}
+  .v26 p{margin:4px 0 0;font-size:14px;color:#5a4a30}
+  .v26 p strong{color:#2a2114}
+
+  .formula{font-family:var(--mono);font-size:13px;background:#fff;border:1px solid var(--border);
+    border-radius:var(--r);padding:12px 15px;margin:12px 0;color:var(--text);overflow-x:auto}
+  .formula .c3{color:var(--p3)}.formula .c4{color:var(--p4)}.formula .c5{color:var(--p5)}
+  .formula .cg{color:var(--gt)}.formula .ca{color:var(--accent)}
+  @keyframes decodeFlash{
+    0%{background:#fff3df;box-shadow:0 0 0 2px var(--accent) inset}
+    100%{background:#fff;box-shadow:0 0 0 2px rgba(255,138,0,0) inset}}
+  .flash-decode{animation:decodeFlash .7s ease-out}
+
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.twocol{grid-template-columns:1fr}}
+  .mini{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:14px}
+  .mini h4{font-size:14px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:7px}
+  .mini p{font-size:13px;margin:4px 0 0}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  .vchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+  .vchips span{font-family:var(--mono);font-size:11.5px;padding:4px 7px;border-radius:6px;
+    background:#fff;border:1px solid var(--border);color:#5a6a85}
+  .vchips span.box{border-color:#ffd08a;color:#b56f00;background:#fff8ec}
+  .vchips span.cls{border-color:#bcd0ff;color:var(--primary);background:#eef3ff}
+  .vchips span.cls.top{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .infoline{font-size:13px;color:#33425e;margin-top:10px;min-height:20px}
+  .infoline b{color:var(--text)}
+
+  footer{border-top:1px solid var(--border);margin-top:30px;padding:26px 0 56px;
+    color:var(--muted);font-size:12.5px}
+  footer .s{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-family:var(--mono);
+    font-size:11.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+
+<header class="hero"><div class="wrap">
+  <span class="eyebrow">◆ Object Detection · A Visual Course</span>
+  <h1>How <span class="hl">YOLO26</span> Works</h1>
+  <p class="hero-sub">
+    <em>2110433 Computer Vision - Thananop Kobchaisawat</em><br/>
+    For people who already understand image classification. We build the model
+    one idea at a time — structure first, then <em>why</em> each part exists, then how it learns.</p>
+  <div class="hero-meta">
+    <span class="pill"><b>9 acts</b> · structure → reasoning → learning</span>
+    <span class="pill">Starts from <b>CNN classification</b></span>
+  </div>
+</div></header>
+
+<nav><div class="wrap">
+  <a href="#a1" class="nl">1 · The Gap</a>
+  <a href="#a2" class="nl">2 · The Grid</a>
+  <a href="#a3" class="nl">3 · Skeleton</a>
+  <a href="#a4" class="nl">4 · Receptive Field</a>
+  <a href="#a5" class="nl">5 · The Neck</a>
+  <a href="#a6" class="nl">6 · Full Network</a>
+  <a href="#a7" class="nl">7 · Grid ↔ Truth</a>
+  <a href="#a8" class="nl">8 · Grid → Box</a>
+  <a href="#sum" class="nl">Summary</a>
+</div></nav>
+
+<main class="wrap">
+
+<!-- ============ ACT 1 ============ -->
+<section class="act" id="a1">
+  <div class="act-head"><span class="act-num">01</span><h2>From Classification to Detection</h2></div>
+  <p class="act-lede">You already know image classification. Seeing exactly what it
+    <em>can't</em> do tells us what every part of YOLO is for.</p>
+  <p>In <strong>classification</strong>, an image flows through a CNN; the spatial feature map is
+    pooled into a single vector, a softmax produces class probabilities, and you get
+    <strong>one label</strong> — it answers <em>"what is in this image?"</em></p>
+  <p><strong>Detection</strong> must answer three things at once — <strong>what</strong>,
+    <strong>where</strong>, and <strong>how many</strong>.</p>
+
+  <div class="viz card"><div class="viz-pad"><div class="twocol">
+    <div class="mini"><h4><span class="dot" style="background:var(--muted)"></span>Classification</h4>
+      <canvas id="a1cls" height="150"></canvas>
+      <p>Whole image → CNN → <strong>one answer</strong>. No location, no count.</p></div>
+    <div class="mini"><h4><span class="dot" style="background:var(--primary)"></span>Detection (the goal)</h4>
+      <canvas id="a1det" height="150"></canvas>
+      <p>Same image → <strong>a box + label for every object</strong>.</p></div>
+  </div></div></div>
+
+  <p>The name <strong>YOLO — "You Only Look Once"</strong> means it produces all detections in a
+    <strong>single forward pass</strong>, instead of the older two-stage approach (propose
+    regions, then classify each). That is what makes it fast.</p>
+
+  <div class="takeaway"><div class="ico">1</div><div class="t">
+    <b>Key idea —</b> Classification gives one answer for the whole image; detection needs an
+    answer for every object.</div></div>
+</section>
+
+<!-- ============ ACT 2 ============ -->
+<section class="act" id="a2">
+  <div class="act-head"><span class="act-num">02</span><h2>The Core Idea — Classification on a Grid</h2></div>
+  <p class="act-lede">One insight turns a classifier into a detector. Get this and the rest is detail.</p>
+  <p>A classifier <em>throws away</em> the feature map's spatial layout — it pools
+    <span class="mono">[C, H, W]</span> into one vector. YOLO's move: <strong>keep the H×W
+    grid</strong>, and treat <strong>every cell as its own tiny prediction</strong> — a class plus
+    a box for whatever object overlaps that cell.</p>
+  <p>Tap a cell. Cells over the <span class="acc-p5">person</span>,
+    <span class="acc-p4">car</span> or <span class="acc-p3">bird</span> predict that object;
+    cells over empty space predict <strong>background</strong>:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start"
+         class="a2wrap">
+      <div><canvas id="a2grid" width="252" height="252"
+        style="border:1px solid var(--border);border-radius:10px;cursor:pointer;width:252px"></canvas>
+        <div class="viz-cap" style="margin-top:6px">Feature-map grid over the image — tap a cell</div></div>
+      <div>
+        <div class="viz-cap" id="a2cell" style="font-weight:700;color:var(--text)"></div>
+        <h3 style="margin-top:8px">This cell predicts</h3>
+        <div class="vchips" id="a2pred"></div>
+        <div class="infoline" id="a2note"></div>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="v26"><span class="tag">▸ New in YOLO26</span>
+    <p>A cell's center mapped to image coordinates is its <strong>anchor point</strong> — a point,
+    not a box. YOLO26 is <strong>anchor-free</strong>: each cell regresses a box directly, with
+    no predefined anchor boxes.</p></div>
+
+  <div class="takeaway"><div class="ico">2</div><div class="t">
+    <b>Key idea —</b> A detector is a classifier run in parallel on every cell of a feature map,
+    plus a box regressor on each cell.</div></div>
+</section>
+
+<!-- ============ ACT 3 ============ -->
+<section class="act" id="a3">
+  <div class="act-head"><span class="act-num">03</span><h2>The Skeleton — Backbone · Neck · Head</h2></div>
+  <p class="act-lede">Before going deeper, here is the whole network in one picture. Every YOLO
+    has three parts. Right now, focus on the <strong class="acc-p3">Backbone</strong>.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="pyr3" class="fig" viewBox="0 0 1020 340"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">Highlighted: how the Backbone produces feature maps.
+    The Neck and Head come in Acts 5–8.</span></div>
+  </div>
+
+  <p>The <strong class="acc-p3">Backbone</strong> is just a CNN — stacked convolutions,
+    downsampling, growing channels. Each <span class="mono">stride-2</span> convolution halves
+    the spatial size, producing a sequence of ever-smaller feature maps:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="dsfig" class="fig" viewBox="0 0 1020 210"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">Full sequence P1–P5. YOLO taps <strong>P3, P4, P5</strong>
+    — and skips P1/P2 (see below).</span></div>
+  </div>
+
+  <p>The backbone produces five levels, but YOLO only <strong>taps three</strong>:
+    <span class="acc-p3">P3</span> (80²), <span class="acc-p4">P4</span> (40²),
+    <span class="acc-p5">P5</span> (20²). Why not P1/P2? They are too shallow — their features
+    are still low-level edges with <strong>weak semantics</strong>, and their grids are so fine
+    (320², 160²) that using them would be expensive for little gain. P3–P5 hit the sweet spot.</p>
+
+  <div class="formula">
+    <span class="c3">P3</span> = 640 ÷ 8 = <span class="c3">80²</span> &nbsp;·&nbsp;
+    <span class="c4">P4</span> = 640 ÷ 16 = <span class="c4">40²</span> &nbsp;·&nbsp;
+    <span class="c5">P5</span> = 640 ÷ 32 = <span class="c5">20²</span>
+  </div>
+
+  <div class="takeaway"><div class="ico">3</div><div class="t">
+    <b>Key idea —</b> Backbone, Neck, Head. The backbone makes P1–P5; YOLO uses P3/P4/P5 — the
+    sweet spot of resolution and semantics.</div></div>
+</section>
+
+<!-- ============ ACT 4 ============ -->
+<section class="act" id="a4">
+  <div class="act-head"><span class="act-num">04</span><h2>Receptive Field — Why Three Scales</h2></div>
+  <p class="act-lede">Why three feature maps instead of one? Because one cell on each level
+    "sees" a different-sized region when you project it back onto the input image.</p>
+
+  <p>The <strong>receptive field (RF)</strong> of a cell is the region of the
+    <em>input image</em> that affects it. The 3D view below makes it literal: pick a cell on the
+    feature plane, and the cone projects down to the patch of the input image it actually sees.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <canvas id="a4canvas" height="400" style="cursor:crosshair"></canvas>
+    <div class="infoline" id="a4info"></div>
+  </div>
+  <div class="viz-bar">
+    <span class="viz-cap" style="font-weight:700">Level:</span>
+    <span id="a4levels" style="display:flex;gap:5px"></span>
+    <span class="viz-cap" style="font-weight:700;margin-left:8px">Object:</span>
+    <span id="a4objs" style="display:flex;gap:5px"></span>
+  </div>
+  </div>
+
+  <p>Deeper, coarser levels (<span class="acc-p5">P5</span>) have a <strong>large</strong> RF —
+    good for big objects. Shallow, fine levels (<span class="acc-p3">P3</span>) have a
+    <strong>small</strong> RF — good for small objects. Project a cell back and the rule is
+    obvious: an object must <strong>fit inside the RF</strong> (or a cell sees only a fragment)
+    and be <strong>larger than one cell</strong> (or it is lost in the grid). That is exactly
+    why three scales exist.</p>
+
+  <div class="v26"><span class="tag">▸ New in YOLO26</span>
+    <p>RF is a property of the convolutional backbone — 26 doesn't change it. The
+    <strong>SPPF</strong> and <strong>C2PSA</strong> blocks at the end of the backbone
+    deliberately widen P5's receptive field for large objects and scene context.</p></div>
+
+  <div class="takeaway"><div class="ico">4</div><div class="t">
+    <b>Key idea —</b> A cell only detects what fits inside its receptive field — so each scale is
+    tuned to a range of object sizes.</div></div>
+</section>
+
+<!-- ============ ACT 5 ============ -->
+<section class="act" id="a5">
+  <div class="act-head"><span class="act-num">05</span><h2>The Neck — Fusing the Three Scales</h2></div>
+  <p class="act-lede">We know <em>why</em> three scales exist. The <strong class="acc-p4">Neck</strong>
+    mixes them — here is the whole thing in one picture, drawn together with the Backbone so you
+    can see where every map comes from.</p>
+
+  <p><strong>The problem.</strong> <span class="acc-p3">P3</span> (shallow) has sharp location but
+    <strong>weak semantics</strong>. <span class="acc-p5">P5</span> (deep) has <strong>strong
+    semantics</strong> but coarse location. Neither is good alone — so the Neck runs two flows.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="neckFig" class="fig" viewBox="0 0 1020 430"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">⊕ = Concat (fuse) · the vertical axis is
+    <strong>resolution / depth</strong> — P3 shallow &amp; fine at the bottom, P5 deep &amp;
+    coarse at the top.</span></div>
+  </div>
+
+  <p>Read it left to right. The <strong>Backbone</strong> (faint, left) goes deep top-to-bottom
+    and taps three levels — <span class="acc-p3">C3</span>, <span class="acc-p4">C4</span>,
+    <span class="acc-p5">C5</span>. The <span class="acc-p3">FPN — top-down</span> flow upsamples
+    deep maps and merges them <strong>downward</strong> via lateral connections (carrying
+    semantics down). The <span class="acc-p4">PAN — bottom-up</span> flow then downsamples and
+    merges <strong>upward</strong> (carrying precise localization up). Each ⊕ is a
+    <strong>Concat</strong> + a conv block that learns to mix. Three fused maps leave
+    <strong>to the Head</strong> (right).</p>
+
+  <div class="v26"><span class="tag">▸ Worth noting</span>
+    <p>The two flows don't connect level-for-level blindly: <strong>PAN-P5 is fused with the
+    Backbone's C5 directly</strong> (not the FPN-P5 output), PAN-P4 takes the FPN-P4 result, and
+    PAN-P3 simply <em>is</em> the FPN-P3 output. The diagram draws these exact connections.</p></div>
+
+  <div class="takeaway"><div class="ico">5</div><div class="t">
+    <b>Key idea —</b> The Neck sends meaning downward (FPN) and precision upward (PAN), so every
+    output scale has both.</div></div>
+</section>
+
+<!-- ============ ACT 6 ============ -->
+<section class="act" id="a6">
+  <div class="act-head"><span class="act-num">06</span><h2>The Full Network — Putting It Together</h2></div>
+  <p class="act-lede">You've now seen every part. Here they are assembled — the whole pipeline,
+    end to end, in one picture.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="pyrFull" class="fig" viewBox="0 0 1020 340"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">One forward pass: INPUT → Backbone → Neck → Head →
+    OUTPUT.</span></div>
+  </div>
+
+  <p>That is the entire architecture: the <strong class="acc-p3">Backbone</strong> extracts
+    features at three scales, the <strong class="acc-p4">Neck</strong> fuses them, and three
+    <strong class="acc-p5">Heads</strong> turn each fused level into a prediction grid. Acts 7–8
+    cover the last piece — how those grids are <strong>trained</strong> and then turned into
+    <strong>final boxes</strong>.</p>
+
+  <div class="takeaway"><div class="ico">6</div><div class="t">
+    <b>Key idea —</b> Input → Backbone → Neck → Head → Output. One forward pass, three scales,
+    fused once.</div></div>
+</section>
+
+<!-- ============ ACT 7 ============ -->
+<section class="act" id="a7">
+  <div class="act-head"><span class="act-num">07</span><h2>The Grid &amp; Ground Truth — How It Learns</h2>
+    <span class="phase train">Training only</span></div>
+  <p class="act-lede">Each Head turns a feature map into a prediction grid. Here is what a cell
+    holds — and how it learns from ground-truth boxes.</p>
+
+  <p>The Head's output is a tensor: a grid of cells, and along the <strong>channel axis</strong>
+    each cell carries a prediction vector — <strong class="acc-p4">4 box numbers</strong> plus
+    <strong class="acc-p3">one score per class</strong>. (What those 4 numbers really are is
+    explained right after.) Tap a cell:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="cell3d" class="fig" viewBox="0 0 1020 360"></svg>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">The Head output is a 3D tensor — H×W grid × (4 +
+    classes) channels. Each cell's channel column <em>is</em> its prediction.</span></div>
+  </div>
+
+  <h3>What the 4 box channels really are — l, t, r, b</h3>
+  <p>It is tempting to call the 4 box numbers "x, y, w, h", but YOLO26's anchor-free head does
+    not regress a center and size. Each cell predicts <strong>4 distances</strong> from its own
+    anchor point to the four edges of the box — <span class="mono">l, t, r, b</span> (left, top,
+    right, bottom). Distances from a fixed point are easier to learn and pair naturally with the
+    box loss.</p>
+  <p>These raw distances are <strong>not pixels and not 0–1</strong> — they are in
+    <strong>cell units</strong>. To become a real box they are <strong>decoded</strong> with the
+    cell's anchor point and the level's stride. Drag the four sliders and watch the box — and its
+    decoded pixel coordinates — update live:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center;
+      max-width:960px;margin:0 auto">
+      <svg id="ltrbFig" class="fig" viewBox="0 0 470 466"
+        style="width:580px;flex-shrink:0;margin:0"></svg>
+      <div style="flex:1;min-width:300px">
+        <div id="ltrbSliders" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <div class="ctl-label" style="margin-bottom:8px">
+            <span style="font-weight:700;color:var(--ink)">Decode for level</span></div>
+          <span id="ltrbStride" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+          <p style="margin:9px 0 0;font-size:11px;line-height:1.5;color:var(--muted)">Raw
+            l, t, r, b stay the same — only the <span class="mono">× stride</span> factor
+            changes.</p>
+        </div>
+        <div id="ltrbDecode" class="formula"
+          style="margin-top:16px;line-height:1.85"></div>
+      </div>
+    </div>
+  </div></div>
+
+  <p>Notice the raw distances never change when you switch level — only the
+    <span class="mono">× stride</span> step does. So the chain is: <strong>raw output = cell-unit
+    distances → × stride → 640 px → (undo letterbox) → original image</strong>. That last decode
+    step is shown in Act 8.</p>
+
+  <h3>Mapping a ground-truth box to cells</h3>
+  <p>During training every image has <strong>ground-truth (GT) boxes</strong>. The model must
+    <strong>decide which cell is responsible for which GT box</strong> — this is
+    <strong>label assignment</strong>.</p>
+
+  <h3>First: put the GT box and the grid in the same coordinates</h3>
+  <p>The GT box from the label file is in <strong>original-image pixels</strong>; the grid is in
+    <strong>cell units</strong>. The two cannot be compared until they are in the same units.</p>
+  <p>The journey from one to the other has <strong>two distinct stages</strong>, and they are
+    different kinds of transform:</p>
+  <ul class="bul">
+    <li><strong>Letterbox</strong> — the original image (any size, any aspect ratio) is scaled by
+      a single factor <span class="mono">r</span> and grey-padded to <span class="mono">640 ×
+      640</span>. Because every axis uses the <em>same</em> <span class="mono">r</span>, the box
+      keeps its shape — it is resized and shifted, never stretched.</li>
+    <li><strong>÷ stride</strong> — the 640 px box is divided by the level's stride (8, 16, 32)
+      to land in <span class="mono">cell units</span>. This is not a resize at all; it just
+      <em>relabels</em> the same picture in a coarser unit.</li>
+  </ul>
+  <p>So the full path is <span class="mono">original px → (letterbox: × r, pad) → 640 px →
+    (÷ stride) → cell units</span>. And it is reversible: run it backward —
+    <span class="mono">× stride</span>, then undo the letterbox — and you have exactly the
+    <strong>decode</strong> step from the previous section. Same transform, opposite directions;
+    both bring the predicted box and the GT box into a shared coordinate system so assignment
+    can compare them.</p>
+
+  <p>The chain below runs the conversion <strong>either way</strong> — pick a direction and a box
+    size, and watch the <em>same</em> box travel between original pixels, 640 px, and the three
+    grids:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="coordChain" class="fig" viewBox="0 0 1020 502"></svg>
+  </div>
+  <div class="viz-bar" style="flex-wrap:wrap;row-gap:6px">
+    <span class="viz-cap" style="font-weight:700">Direction:</span>
+    <span id="ccDir" style="display:flex;gap:5px"></span>
+    <span class="viz-cap" style="font-weight:700;margin-left:10px">Box size:</span>
+    <span id="ccBtns" style="display:flex;gap:5px"></span>
+    <span class="viz-cap" style="font-weight:700;margin-left:10px">Source grid:</span>
+    <span id="ccGrid" style="display:flex;gap:5px"></span>
+  </div>
+  <div class="viz-bar"><span class="viz-cap" id="ccNote"></span></div>
+  </div>
+
+  <p>One GT box covers <strong>many cells on P3</strong> but only <strong>a few — or none — on
+    P5</strong>. That is the training-side echo of the receptive-field story from Act 4: a small
+    object barely registers on the coarse grids, which is why it must be caught on
+    <span class="acc-p3">P3</span>. Either way, once the box is in cell units, checking <em>"is a
+    cell's anchor point inside it?"</em> is just a <strong>number comparison</strong>.</p>
+
+  <h3>How many cells? 8400</h3>
+  <p>So far we've looked at one cell on one grid. Across all three grids the cells add up to a
+    number you'll keep seeing — <strong>8400</strong> — and it is not magic:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="cellCount" class="fig" viewBox="0 0 1020 200"></svg>
+  </div></div>
+
+  <h3>Where do a cell's predictions come from?</h3>
+  <p>One last thing before assignment. Every cell <strong>already outputs that channel
+    column</strong> — the 4 distances <span class="mono">l, t, r, b</span> plus a score per
+    class — on <em>every</em> forward pass, trained or not. Early in training those numbers are
+    basically random, but they exist. So a cell always has a <strong>predicted box</strong> and
+    <strong>predicted class scores</strong>. Label assignment runs <em>on top of</em> these raw
+    predictions — it never comes before them.</p>
+
+  <h3>The three steps of assignment</h3>
+  <p>With the box on the grid, assignment runs in three steps:</p>
+  <ul class="bul">
+    <li><strong>① Filter candidates</strong> — only cells whose <strong>anchor point falls inside
+      the converted GT box</strong> compete; every other cell is immediately background. The
+      cells of <strong>all three grids are pooled into one set</strong> first, so a candidate may
+      come from P3, P4 or P5 — assignment never runs one grid at a time. This step is
+      <strong>pure geometry</strong> — it never looks at the model's weights.</li>
+    <li><strong>② Score each candidate</strong> with the alignment metric
+      <span class="mono">t = s<sup>α</sup>·u<sup>β</sup></span>. Both values are read straight
+      from that cell's channel column: <span class="mono">s</span> is its <em>predicted</em>
+      score <em>for the GT's class</em>, and <span class="mono">u</span> is the IoU between its
+      <em>predicted</em> box (the l, t, r, b channels, decoded) and the GT box.</li>
+    <li><strong>③ Take top-k</strong> — rank candidates by <span class="mono">t</span>; the best
+      k become <strong>positive</strong> (trained toward this GT), the rest become background.</li>
+  </ul>
+
+  <div class="card" style="padding:14px 18px;margin:16px 0;border-left:3px solid var(--primary)">
+    <p style="margin:0;font-weight:800;color:var(--primary);font-size:11px;letter-spacing:.05em;
+      text-transform:uppercase">▸ One pool, not three</p>
+    <p style="margin:7px 0 0;font-size:14.5px;color:#33425e">Before assignment, the three grids
+      are flattened and concatenated into a <strong>single set of 8400 cells</strong>
+      (80² + 40² + 20²). Steps ①–③ run <strong>once</strong> over that whole pool — so a single
+      GT box can collect positive cells from <strong>more than one scale at once</strong> (some
+      from P3, some from P4). Nothing routes an object to a fixed grid; which scale ends up
+      winning is an <em>emergent</em> effect of the <span class="mono">u</span> (IoU) term — a
+      cell only scores well when its decoded box fits the GT, which happens naturally at the
+      scale that matches the object's size.</p>
+  </div>
+
+  <h3>Where does <span class="mono">s</span> come from?</h3>
+  <p>The GT box carries a <strong>class label</strong> (say, "car"). The cell's channel column
+    has one score per class. <span class="mono">s</span> is simply <strong>the value in the
+    channel that matches the GT's label</strong> — not all of them, not the argmax, just that
+    one indexed channel. It is a lookup into the tensor, nothing more:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="sFig" class="fig" viewBox="0 0 1020 200"></svg>
+  </div></div>
+
+  <div class="card" style="padding:16px 18px;margin:18px 0;border-left:3px solid var(--accent)">
+    <p style="margin:0;font-weight:800;color:var(--accent);font-size:11px;letter-spacing:.05em;
+      text-transform:uppercase">▸ The chicken-and-egg question</p>
+    <p style="margin:7px 0 0;font-size:14.5px;color:#33425e"><em>If the weights start random, the
+      predicted boxes are garbage — so what does assignment align to on step 0?</em> The answer
+      is step ①. Filtering candidates is <strong>pure geometry</strong>: it depends only on
+      whether a cell sits inside the GT box, never on the weights. So even at random
+      initialization, assignment still picks cells in the <strong>right region</strong>. On step
+      0 every candidate's <span class="mono">t</span> is tiny and roughly equal, so top-k is
+      almost a coin flip <em>within that correct region</em> — and the chosen cells get pulled
+      toward the GT by the loss. Next step their <span class="mono">t</span> is a little higher,
+      so ② starts selecting them <em>because they are good</em>. Step ① is the anchor that keeps
+      the system from drifting; ② and ③ only sharpen with training. Toggle <strong>Step 0</strong>
+      vs <strong>Trained</strong> below to see it.</p>
+  </div>
+
+  <p>Adjust each candidate below. The <strong>class-score strip</strong> shows where
+    <span class="mono">s</span> comes from — it is always the channel for the <strong>GT's class
+    (car)</strong>, never simply the tallest bar. The IoU diagram shows <span class="mono">u</span>
+    as the overlap of the cell's predicted box (dashed) with the GT box:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div class="a7wrap" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+        <svg id="assignFig" class="fig" viewBox="0 0 240 240"
+          style="width:240px;flex-shrink:0;margin:0"></svg>
+        <div class="viz-cap" style="flex:1;min-width:230px;font-size:12px;line-height:1.65">
+          <b>Green</b> = the GT box · a <b>filled cell</b> = a positive cell. The three
+          candidates A, B, C are <b>ranked by t</b>; the top <b>k = 2</b> become positive (the
+          real model caps k at 10 — here there are only 3 candidates, so k = 2).</div>
+      </div>
+      <div id="a7cards"
+        style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px"></div>
+    </div>
+  </div>
+  <div class="viz-bar">
+    <span class="viz-cap" style="font-weight:700">Preset:</span>
+    <span id="a7presets" style="display:flex;gap:5px"></span>
+    <span class="viz-cap">— Step 0 = random weights (t's nearly equal) · Trained = t's spread out</span>
+  </div>
+  <div class="viz-bar"><span class="viz-cap">In
+    <span class="mono">t = s<sup>0.5</sup>·u<sup>6</sup></span>, the exponents
+    <span class="mono">0.5</span> and <span class="mono">6</span> are <span class="mono">α</span>
+    and <span class="mono">β</span> — the TaskAlignedAssigner's <strong>default
+    hyperparameters</strong> (tunable, but rarely changed). β ≫ α makes box accuracy
+    (<span class="mono">u</span>) dominate the metric.</span></div>
+  </div>
+
+  <h3>After assignment: computing the loss</h3>
+  <p>Once every cell is labelled positive or background, the loss is computed — and the two kinds
+    of cell are trained <strong>differently</strong>:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="lossFig" class="fig" viewBox="0 0 1020 240"></svg>
+  </div></div>
+
+  <p><strong>Positive cells</strong> get two losses: a <strong>box loss (CIoU)</strong> pulling
+    their decoded l, t, r, b box toward the GT box, and a <strong>class loss (BCE)</strong>
+    pushing the GT class channel up. <strong>Background cells</strong> get only the
+    <strong>class loss (BCE)</strong> — pushing every class channel down toward "nothing" — and
+    no box loss, since there is no box to match. The losses are summed and
+    <strong>backpropagation</strong> updates the whole network. Those updates are exactly what
+    make the next forward pass's boxes and scores a little better — which is why assignment
+    sharpens over training.</p>
+
+  <p>It is worth being precise about those two losses — and a picture helps more than the
+    names do.</p>
+
+  <p><strong>The box loss is CIoU</strong>, not a coordinate-wise regression. A plain
+    <span class="mono">L1</span> loss would score each of the four distances
+    <span class="mono">l, t, r, b</span> on its own; CIoU instead scores the predicted box
+    against the GT box <strong>as one whole shape</strong>, combining three parts:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;
+      max-width:980px;margin:0 auto">
+      <svg id="ciouFig" class="fig" viewBox="0 0 472 396"
+        style="width:430px;flex-shrink:0;margin:0"></svg>
+      <div style="flex:1;min-width:290px">
+        <div style="background:var(--bg2);border-radius:9px;padding:12px 14px">
+          <div class="mono" style="font-size:15px;font-weight:800;color:var(--ink);
+            line-height:1.5">CIoU loss<br>= (1 − IoU) + d²/c² + α·v</div>
+        </div>
+        <p style="margin:15px 0 10px;font-size:9.5px;font-weight:800;letter-spacing:.07em;
+          text-transform:uppercase;color:#9aa6bc">where</p>
+        <div style="font-size:13px;line-height:1.6;color:#33425e">
+          <div style="display:flex;gap:11px;margin-bottom:9px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:15px">d</span>
+            <span>distance between the two box centres</span></div>
+          <div style="display:flex;gap:11px;margin-bottom:9px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:15px">c</span>
+            <span>diagonal of the smallest box that encloses both boxes</span></div>
+          <div style="display:flex;gap:11px;margin-bottom:9px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:15px">v</span>
+            <span><span class="mono">(4/π²)·(arctan(w_gt/h_gt) − arctan(w/h))²</span> —
+              aspect-ratio mismatch, <strong>0 when the ratios match</strong></span></div>
+          <div style="display:flex;gap:11px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:15px">α</span>
+            <span><span class="mono">v / ((1−IoU) + v)</span> — trade-off weight, stays
+              small until the boxes start to overlap</span></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <p>Because IoU is a ratio it is <strong>scale-invariant</strong> — and the centre-distance
+    term keeps a useful gradient even when the two boxes do not overlap at all, where a raw IoU
+    loss would be flat at zero.</p>
+
+  <p><strong>The class loss is BCE</strong> — binary cross-entropy on <strong>each class channel
+    independently</strong>, each with its own sigmoid (no shared softmax). Every channel is just
+    pulled toward a simple 0 or 1 target:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center;
+      max-width:1020px;margin:0 auto">
+      <div style="flex:1;min-width:330px">
+        <table style="width:100%;border-collapse:collapse;
+          font-size:13px;text-align:center">
+          <thead><tr>
+            <th style="text-align:left;padding:9px 12px;color:#61708a;width:42%">Class channel</th>
+            <th style="padding:9px;color:#61708a;font-weight:700">bird</th>
+            <th style="padding:9px;background:#eef4ff;color:#2f6bff;font-weight:800">car
+              <span style="font-size:10px;font-weight:600">· GT class</span></th>
+            <th style="padding:9px;color:#61708a;font-weight:700">person</th>
+            <th style="padding:9px;color:#61708a;font-weight:700">dog</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-top:1px solid #d9e4ff">
+              <td style="text-align:left;padding:11px 12px;font-weight:700">Predicted score
+                <span style="color:#8b97ac;font-weight:400">· own sigmoid, 0–1</span></td>
+              <td class="mono" style="padding:11px">0.28</td>
+              <td class="mono" style="padding:11px;background:#eef4ff;font-weight:800">0.52</td>
+              <td class="mono" style="padding:11px">0.16</td>
+              <td class="mono" style="padding:11px">0.44</td>
+            </tr>
+            <tr style="border-top:1px solid #d9e4ff">
+              <td style="text-align:left;padding:11px 12px;font-weight:700">Target —
+                <span style="color:#1a7d44">positive cell</span>
+                <span style="color:#8b97ac;font-weight:400">· GT = car</span></td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+              <td class="mono" style="padding:11px;background:#2ecc71;color:#fff;
+                font-weight:800">1</td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+            </tr>
+            <tr style="border-top:1px solid #d9e4ff">
+              <td style="text-align:left;padding:11px 12px;font-weight:700">Target —
+                <span style="color:#61708a">background cell</span>
+                <span style="color:#8b97ac;font-weight:400">· no object</span></td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+              <td class="mono" style="padding:11px;color:#aab4c6">0</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="viz-cap" style="margin-top:11px">Each row is a target vector — BCE pushes
+          every predicted score toward its column's target, up toward <b>1</b> or down toward
+          <b>0</b>.</div>
+      </div>
+      <div style="flex:1;min-width:290px">
+        <div style="background:var(--bg2);border-radius:9px;padding:12px 14px">
+          <div class="mono" style="font-size:14px;font-weight:800;color:var(--ink);
+            line-height:1.5">BCE loss <span style="font-weight:600;color:#8b97ac;
+            font-size:11px">· per cell</span><br>= − Σ<sub>c</sub> [ y·log(p) +
+            (1−y)·log(1−p) ]</div>
+        </div>
+        <p style="margin:15px 0 10px;font-size:9.5px;font-weight:800;letter-spacing:.07em;
+          text-transform:uppercase;color:#9aa6bc">where</p>
+        <div style="font-size:13px;line-height:1.6;color:#33425e">
+          <div style="display:flex;gap:11px;margin-bottom:9px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:26px">p</span>
+            <span>predicted score for the channel — its own sigmoid, 0–1</span></div>
+          <div style="display:flex;gap:11px;margin-bottom:9px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:26px">y</span>
+            <span>target for the channel — <strong>1</strong> for the GT class of a
+              positive cell, <strong>0</strong> otherwise</span></div>
+          <div style="display:flex;gap:11px">
+            <span class="mono" style="font-weight:800;color:var(--ink);flex-shrink:0;
+              width:26px">Σ<sub>c</sub></span>
+            <span>runs over every class channel — each is an independent binary decision,
+              never coupled by a softmax</span></div>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <p>A <strong>positive</strong> cell pulls its GT-class channel up and the rest down; a
+    <strong>background</strong> cell pulls <em>every</em> channel down — which is how a cell
+    learns to predict "nothing" without needing a dedicated background class. One refinement:
+    modern YOLO does not use a hard <span class="mono">1</span> for the positive class — it uses
+    the normalised alignment score <span class="mono">t</span> as a <strong>soft
+    target</strong>, so a well-aligned cell is trained toward ~1 and a barely-qualifying one
+    toward less.</p>
+
+  <h3>Two heads — how YOLO26 drops NMS</h3>
+  <p>Everything so far described <strong>one</strong> assignment rule — top-k, many cells per
+    GT. That is YOLO26's <strong>one-to-many head</strong>. But a model trained only that way
+    produces <em>many</em> overlapping boxes per object at inference, which then need NMS to
+    clean up. YOLO26 avoids NMS by training a <strong>second head</strong> alongside it:</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="dualFig" class="fig" viewBox="0 0 1020 340"></svg>
+  </div></div>
+
+  <p>Both heads read the <strong>same backbone + neck features</strong> — they differ only in
+    <strong>label assignment</strong>. The <strong>one-to-many head</strong> assigns the top-k
+    cells (dense supervision — this is what trains the shared features well). The
+    <strong>one-to-one head</strong> assigns only the single <em>top-1</em> cell to each GT and
+    pushes every neighbouring cell toward <strong>background (score 0)</strong> — so it learns
+    to be <em>decisive</em>: one confident cell per object, the rest near zero. No filtering
+    step ever runs; the decisiveness is baked into the weights during training. (This is the
+    "consistent dual assignment" idea from YOLOv10.)</p>
+
+  <div class="v26"><span class="tag">▸ New in YOLO26</span>
+    <p>This dual-head design is why YOLO26 is <strong>end-to-end and NMS-free</strong>. The
+    one-to-one head's strict top-1 assignment removes duplicate detections <em>by training</em>,
+    not by a post-processing step.</p></div>
+
+  <div class="takeaway"><div class="ico">7</div><div class="t">
+    <b>Key idea —</b> A cell's channels are its prediction; training first assigns each GT to
+    cells, then optimizes their box + class.</div></div>
+</section>
+
+<!-- ============ ACT 8 ============ -->
+<section class="act" id="a8">
+  <div class="act-head"><span class="act-num">08</span><h2>From Grid to Box — The Final Answer</h2>
+    <span class="phase infer">Inference</span></div>
+  <p class="act-lede">A trained model runs forward only. Here is how the raw grids become a clean
+    set of boxes on the original image.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <canvas id="a8canvas" height="240"></canvas>
+    <div class="infoline" id="a8label" style="font-size:14.5px"></div>
+  </div>
+  <div class="viz-bar">
+    <button class="btn" id="a8prev">‹ Back</button>
+    <button class="btn pri" id="a8next">Next step ›</button>
+    <div class="track"><i id="a8fill"></i></div>
+    <span class="viz-cap mono" id="a8step"></span>
+  </div>
+  </div>
+
+  <p>Every cell across P3/P4/P5 outputs a vector — <strong>8400 in total</strong>. Its 4 box
+    channels are the <span class="mono">l, t, r, b</span> distances from Act 7; they are
+    <strong>decoded</strong> into pixel coordinates with the cell's anchor index and the level's
+    stride — <span class="mono">x1 = (col − l) × stride</span>, and likewise for the other three
+    edges. Older YOLO heads produce many overlapping boxes per object, so they need
+    <strong>NMS — Non-Maximum Suppression</strong>: a post-processing step that keeps the
+    highest-confidence box and removes overlapping duplicates.</p>
+
+  <div class="v26"><span class="tag">▸ New in YOLO26</span>
+    <p>At inference YOLO26 runs <strong>only the one-to-one head</strong> — the one-to-many head
+    from Act 7 is simply <strong>not executed</strong>. Its job finished during training: it
+    gave the shared backbone and neck dense supervision so they learned good features. Those
+    features are now trained, so running the one-to-many head would only add duplicate boxes —
+    it is dropped at <strong>zero cost</strong>. The one-to-one head alone outputs one confident
+    box per object, so <strong>no NMS is needed</strong>: YOLO26 is end-to-end and NMS-free.</p></div>
+
+  <p>Finally, because the input was letterboxed, the coordinates are <strong>mapped back through
+    the letterbox transform</strong> (undo the scale and padding) to land on the original image.</p>
+
+  <div class="takeaway"><div class="ico">8</div><div class="t">
+    <b>Key idea —</b> 8400 raw predictions are decoded, deduplicated and mapped back — and
+    YOLO26 deduplicates without NMS.</div></div>
+</section>
+
+<!-- ============ SUMMARY ============ -->
+<section class="act" id="sum">
+  <div class="act-head"><span class="act-num">★</span><h2>The Big Picture</h2></div>
+  <p class="act-lede">Nine ideas, one pipeline — and a clear split between training and inference.</p>
+
+  <div class="viz card"><div class="viz-pad">
+    <svg id="sumFig" class="fig" viewBox="0 0 1020 250"></svg>
+  </div></div>
+
+  <h3>The thread, one line each</h3>
+  <ul class="bul">
+    <li><strong>1 · The gap</strong> — classification gives one label; detection needs what, where, how many.</li>
+    <li><strong>2 · The grid</strong> — keep the feature-map grid; every cell predicts a box + class.</li>
+    <li><strong>3 · The skeleton</strong> — Backbone → Neck → Head; the backbone makes P1–P5, YOLO uses P3/P4/P5.</li>
+    <li><strong>4 · Receptive field</strong> — three scales because a cell only detects what fits its RF.</li>
+    <li><strong>5 · The neck</strong> — FPN sends meaning down, PAN sends precision up.</li>
+    <li><strong>6 · Full network</strong> — one forward pass: input → backbone → neck → head → output.</li>
+    <li><strong>7 · Grid ↔ truth</strong> — a cell's channels are x,y,w,h,class; training assigns GTs, then optimizes.</li>
+    <li><strong>8 · Grid → box</strong> — decode 8400 cells, deduplicate (NMS-free), map back to the image.</li>
+  </ul>
+
+  <h3>Training vs inference</h3>
+  <div class="twocol">
+    <div class="mini"><h4><span class="dot" style="background:var(--warning)"></span>Training</h4>
+      <p>Forward pass → <strong>label assignment</strong> → <strong>loss</strong> (BCE + CIoU) →
+      backpropagation. Label assignment runs <em>only</em> here.</p></div>
+    <div class="mini"><h4><span class="dot" style="background:var(--success)"></span>Inference</h4>
+      <p>Forward pass only → decode boxes → one-to-one head (<strong>no NMS</strong>) → map back
+      through letterbox → final boxes.</p></div>
+  </div>
+
+  <div class="takeaway"><div class="ico">★</div><div class="t">
+    <b>The whole model in one sentence —</b> YOLO26 keeps a CNN's feature-map grid at three
+    scales, fuses them so every cell sees both detail and meaning, and turns each cell into a
+    direct, NMS-free box-and-class predictor.</div></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">
+  <div style="margin-top:5px;font-size:13px;color:var(--muted)">Created by
+    <strong style="color:var(--ink)">Thananop Kobchaisawat | 2110533 Computer Vision</strong></div>
+</div></footer>
+
+<script>
+const DPR=Math.min(window.devicePixelRatio||1,2);
+function fit(cv,h){let w=cv.clientWidth||cv.parentNode.clientWidth||cv.parentNode.offsetWidth||320;
+  w=Math.max(w,40);h=Math.max(h,40);
+  cv.width=w*DPR;cv.height=h*DPR;cv.style.height=h+'px';
+  const c=cv.getContext('2d');c.setTransform(DPR,0,0,DPR,0,0);return{c:c,w:w,h:h};}
+const SV='http://www.w3.org/2000/svg';
+function E(t,a){const e=document.createElementNS(SV,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function TX(x,y,s,o){o=o||{};const t=E('text',{x:x,y:y,fill:o.fill||'#0b1b34',
+  'font-size':o.size||12,'font-weight':o.w||600,'text-anchor':o.anchor||'middle',
+  'font-family':'ui-sans-serif,system-ui,sans-serif'});t.textContent=s;return t;}
+const COL={p3:'#2f6bff',p4:'#ff8a00',p5:'#7c3aed',gt:'#2ecc71',muted:'#61708a',
+  ink:'#0b1b34',accent:'#ff8a00'};
+/* scene object boxes (normalised x,y,w,h) — shared truth for Act 2 & elsewhere */
+const OBJ=[{n:'person',col:COL.p5,b:[0.085,0.355,0.115,0.49]},
+           {n:'car',   col:COL.p4,b:[0.385,0.50,0.27,0.25]},
+           {n:'bird',  col:COL.p3,b:[0.645,0.205,0.115,0.115]}];
+
+function scene(c,x,y,w,h,boxes){
+  c.save();
+  w=Math.max(w,40);h=Math.max(h,40);
+  const sk=c.createLinearGradient(x,y,x,y+h);
+  sk.addColorStop(0,'#bcd6f5');sk.addColorStop(1,'#e3eefb');
+  c.fillStyle=sk;c.fillRect(x,y,w,h*0.62);
+  c.fillStyle='#cdd6c4';c.fillRect(x,y+h*0.62,w,h*0.38);
+  c.fillStyle='#f4c542';
+  c.beginPath();c.arc(x+w*0.84,y+h*0.18,Math.max(2,Math.min(w,h)*0.07),0,7);c.fill();
+  c.fillStyle='#5b6b8c';
+  c.fillRect(x+w*0.10,y+h*0.42,w*0.085,h*0.42);
+  c.beginPath();c.arc(x+w*0.142,y+h*0.40,Math.max(1.5,w*0.045),0,7);c.fill();
+  c.fillStyle='#c9543f';
+  c.fillRect(x+w*0.40,y+h*0.60,w*0.24,h*0.13);
+  c.fillRect(x+w*0.45,y+h*0.52,w*0.13,h*0.10);
+  c.fillStyle='#2a3242';
+  c.beginPath();c.arc(x+w*0.46,y+h*0.73,Math.max(1,w*0.022),0,7);c.fill();
+  c.beginPath();c.arc(x+w*0.58,y+h*0.73,Math.max(1,w*0.022),0,7);c.fill();
+  c.strokeStyle='#3a3a44';c.lineWidth=2;
+  const bx=x+w*0.70,by=y+h*0.26;
+  c.beginPath();c.moveTo(bx-7,by);c.quadraticCurveTo(bx,by-6,bx,by);
+  c.quadraticCurveTo(bx,by-6,bx+7,by);c.stroke();
+  if(boxes){
+    OBJ.forEach(o=>{const[a,b,cc,d]=o.b;c.strokeStyle=o.col;c.lineWidth=2.4;
+      c.strokeRect(x+w*a,y+h*b,w*cc,h*d);});
+  }
+  c.restore();
+}
+
+/* ===================== ACT 1 ===================== */
+(function(){
+  function draw(id,withBoxes){
+    const cv=document.getElementById(id);const{c,w,h}=fit(cv,150);
+    c.clearRect(0,0,w,h);
+    const iw=Math.max(40,w-92),ih=Math.max(40,h-20);
+    scene(c,10,10,iw,ih,withBoxes);
+    c.strokeStyle='#d9e4ff';c.strokeRect(10,10,iw,ih);
+    c.strokeStyle='#9aaac6';c.lineWidth=2;
+    c.beginPath();c.moveTo(iw+12,h/2);c.lineTo(iw+28,h/2);c.stroke();
+    if(!withBoxes){
+      c.fillStyle='#eef0f4';c.fillRect(iw+32,h/2-12,54,24);
+      c.strokeStyle='#cfd6e2';c.strokeRect(iw+32,h/2-12,54,24);
+      c.fillStyle='#61708a';c.font='700 10px ui-sans-serif';c.textAlign='center';
+      c.fillText('1 label',iw+59,h/2+3);c.textAlign='left';
+    }else{
+      c.fillStyle='#2f6bff';c.font='700 10px ui-sans-serif';
+      c.fillText('3 boxes',iw+32,h/2-2);c.fillText('+ classes',iw+32,h/2+12);
+    }
+  }
+  function all(){draw('a1cls',false);draw('a1det',true);}
+  all();addEventListener('resize',all);
+})();
+
+/* ===================== ACT 2 — grid matched to image ===================== */
+(function(){
+  const cv=document.getElementById('a2grid'),c=cv.getContext('2d'),G=12,S=252;
+  let sel={i:3,j:8};
+  const CLASSES=['bird','car','person','tree'];
+  function objAt(i,j){
+    const cx=(j+0.5)/G,cy=(i+0.5)/G;
+    for(const o of OBJ){const[a,b,w,h]=o.b;
+      if(cx>=a&&cx<=a+w&&cy>=b&&cy<=b+h)return o;}
+    return null;
+  }
+  function draw(){
+    const cell=S/G;c.clearRect(0,0,S,S);
+    scene(c,0,0,S,S,false);
+    c.fillStyle='rgba(255,255,255,.5)';c.fillRect(0,0,S,S);
+    c.strokeStyle='rgba(47,107,255,.22)';c.lineWidth=1;
+    for(let k=0;k<=G;k++){
+      c.beginPath();c.moveTo(k*cell,0);c.lineTo(k*cell,S);c.stroke();
+      c.beginPath();c.moveTo(0,k*cell);c.lineTo(S,k*cell);c.stroke();}
+    OBJ.forEach(o=>{const[a,b,w,h]=o.b;c.strokeStyle=o.col;c.lineWidth=1.6;
+      c.globalAlpha=.55;c.strokeRect(a*S,b*S,w*S,h*S);c.globalAlpha=1;});
+    const o=objAt(sel.i,sel.j),col=o?o.col:'#61708a';
+    c.fillStyle=col+'33';c.fillRect(sel.j*cell,sel.i*cell,cell,cell);
+    c.strokeStyle=col;c.lineWidth=2.6;c.strokeRect(sel.j*cell,sel.i*cell,cell,cell);
+    if(o){const[a,b,w,h]=o.b;c.strokeStyle=o.col;c.lineWidth=2.6;
+      c.strokeRect(a*S,b*S,w*S,h*S);}
+    c.fillStyle=col;c.beginPath();
+    c.arc(sel.j*cell+cell/2,sel.i*cell+cell/2,3.2,0,7);c.fill();
+  }
+  function update(){
+    const o=objAt(sel.i,sel.j);
+    document.getElementById('a2cell').textContent='Cell (row '+sel.i+', col '+sel.j+')';
+    const pv=document.getElementById('a2pred');pv.innerHTML='';
+    if(o){
+      const[a,b,w,h]=o.b;
+      [['x',(a+w/2)],['y',(b+h/2)],['w',w],['h',h]].forEach(([k,v])=>{
+        const s=document.createElement('span');s.className='box';
+        s.textContent=k+' = '+v.toFixed(2);pv.appendChild(s);});
+      CLASSES.forEach(cl=>{
+        const isT=cl===o.n;
+        const s=document.createElement('span');s.className='cls'+(isT?' top':'');
+        s.textContent=cl+' '+(isT?0.94:0.02).toFixed(2);pv.appendChild(s);});
+      document.getElementById('a2note').innerHTML=
+        'This cell overlaps the <b>'+o.n+'</b> → it predicts class <b>'+o.n
+        +'</b> and a box around it.';
+    }else{
+      ['x','y','w','h'].forEach(k=>{
+        const s=document.createElement('span');s.className='box';
+        s.style.opacity=.5;s.textContent=k+' = —';pv.appendChild(s);});
+      CLASSES.forEach(cl=>{
+        const s=document.createElement('span');s.className='cls';
+        s.textContent=cl+' 0.01';pv.appendChild(s);});
+      const bg=document.createElement('span');bg.className='cls top';
+      bg.style.background='#61708a';bg.style.borderColor='#61708a';
+      bg.textContent='background ✓';pv.appendChild(bg);
+      document.getElementById('a2note').innerHTML=
+        'This cell sits over empty space → it predicts <b>background</b> (no object).';
+    }
+    draw();
+  }
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const j=Math.floor((e.clientX-r.left)/(r.width/G));
+    const i=Math.floor((e.clientY-r.top)/(r.width/G));
+    if(i>=0&&i<G&&j>=0&&j<G){sel={i:i,j:j};update();}
+  });
+  update();
+})();
+
+/* ===================== PYRAMID DIAGRAM (Acts 3 & 6) ===================== */
+function buildPyramid(svgId){
+  const svg=document.getElementById(svgId);
+  while(svg.firstChild)svg.removeChild(svg.firstChild);
+  function shade(hex,a){const n=parseInt(hex.slice(1),16);
+    let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+    const f=x=>Math.max(0,Math.min(255,Math.round(x+a*255)));
+    return'#'+[f(r),f(g),f(b)].map(v=>v.toString(16).padStart(2,'0')).join('');}
+  function grp(name){const g=E('g',{'data-grp':name});svg.appendChild(g);return g;}
+  function slab(g,x,y,w,h,col){
+    const d=12;
+    g.appendChild(E('polygon',{points:`${x},${y} ${x+w},${y} ${x+w+d},${y-d} ${x+d},${y-d}`,
+      fill:shade(col,0.12)}));
+    g.appendChild(E('polygon',{points:`${x+w},${y} ${x+w},${y+h} ${x+w+d},${y+h-d} ${x+w+d},${y-d}`,
+      fill:shade(col,-0.16)}));
+    g.appendChild(E('rect',{x:x,y:y,width:w,height:h,rx:3,fill:shade(col,0.34),
+      stroke:col,'stroke-width':1.8}));
+  }
+  function arrow(g,x1,y1,x2,y2,col,curve){
+    const mx=(x1+x2)/2;
+    const d=curve?`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`
+                 :`M ${x1} ${y1} L ${x2} ${y2}`;
+    g.appendChild(E('path',{d:d,fill:'none',stroke:col,'stroke-width':2.2,
+      'marker-end':'url(#pyA-'+svgId+')'}));
+  }
+  const defs=E('defs',{});
+  const mk=E('marker',{id:'pyA-'+svgId,markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+  mk.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#7a89a6'}));
+  defs.appendChild(mk);svg.appendChild(defs);
+
+  const gin=grp('in');
+  gin.appendChild(E('rect',{x:30,y:128,width:96,height:96,rx:8,fill:'#fff',
+    stroke:COL.muted,'stroke-width':1.6}));
+  gin.appendChild(E('rect',{x:38,y:136,width:80,height:54,fill:'#cfe0f6'}));
+  gin.appendChild(E('rect',{x:38,y:170,width:80,height:20,fill:'#c9d3c0'}));
+  const gbb=grp('bb');
+  gbb.appendChild(E('polygon',{points:'175,72 335,108 335,232 175,268',
+    fill:shade(COL.p3,0.42),stroke:COL.p3,'stroke-width':2}));
+  gbb.appendChild(TX(255,160,'Backbone',{size:14,fill:COL.p3,w:800}));
+  gbb.appendChild(TX(255,178,'CNN · ↓×5',{size:10.5,fill:COL.muted}));
+  arrow(gin,128,176,173,170,'#7a89a6',false);
+  const gcore=grp('core');
+  const P=[{n:'P5 · 20²',y:62, x:430,w:62, h:40,col:COL.p5},
+           {n:'P4 · 40²',y:140,x:412,w:96, h:60,col:COL.p4},
+           {n:'P3 · 80²',y:236,x:392,w:136,h:86,col:COL.p3}];
+  P.forEach(p=>{slab(gcore,p.x,p.y,p.w,p.h,p.col);
+    gcore.appendChild(TX(p.x+p.w/2,p.y+p.h/2+4,p.n,{size:11,fill:p.col,w:800}));});
+  [P[0],P[1],P[2]].forEach((p,k)=>{
+    arrow(gbb,337,[100,160,230][k],p.x-4,p.y+p.h/2,'#7a89a6',true);});
+  const gneck=grp('neck');
+  arrow(gneck,P[0].x-6,P[0].y+P[0].h,P[1].x-6,P[1].y+6,COL.p3,true);
+  arrow(gneck,P[1].x-6,P[1].y+P[1].h,P[2].x-6,P[2].y+6,COL.p3,true);
+  arrow(gneck,P[2].x+P[2].w+14,P[2].y+4,P[1].x+P[1].w+14,P[1].y+P[1].h-4,COL.p4,true);
+  arrow(gneck,P[1].x+P[1].w+14,P[1].y+4,P[0].x+P[0].w+14,P[0].y+P[0].h-4,COL.p4,true);
+  gneck.appendChild(TX(360,300,'FPN ↓',{size:11,fill:COL.p3,w:800,anchor:'end'}));
+  gneck.appendChild(TX(572,300,'PAN ↑',{size:11,fill:COL.p4,w:800,anchor:'start'}));
+  const ghead=grp('head');
+  P.forEach(p=>{
+    const hx=648,hy=p.y+p.h/2-22;
+    ghead.appendChild(E('rect',{x:hx,y:hy,width:66,height:44,rx:8,fill:'#fff',
+      stroke:COL.p5,'stroke-width':1.8}));
+    ghead.appendChild(TX(hx+33,hy+27,'Head',{size:11,fill:COL.p5,w:800}));
+    arrow(ghead,p.x+p.w+18,p.y+p.h/2,hx-4,hy+22,'#7a89a6',true);
+    arrow(ghead,hx+70,hy+22,772,176,'#7a89a6',true);
+  });
+  const gout=grp('out');
+  gout.appendChild(E('rect',{x:774,y:128,width:96,height:96,rx:8,fill:'#fff',
+    stroke:COL.gt,'stroke-width':1.8}));
+  gout.appendChild(E('rect',{x:782,y:136,width:80,height:54,fill:'#cfe0f6'}));
+  gout.appendChild(E('rect',{x:782,y:170,width:80,height:20,fill:'#c9d3c0'}));
+  [[788,150,18,30,COL.p5],[812,162,26,16,COL.p4],[838,144,12,12,COL.p3]].forEach(([x,y,w,h,col])=>{
+    gout.appendChild(E('rect',{x:x,y:y,width:w,height:h,fill:'none',stroke:col,'stroke-width':2}));});
+  const gl=grp('lbl');
+  gl.appendChild(TX(78,40,'INPUT',{size:11,fill:COL.muted,w:800}));
+  gl.appendChild(TX(255,40,'BACKBONE',{size:11,fill:COL.p3,w:800}));
+  gl.appendChild(TX(455,40,'NECK',{size:11,fill:COL.p4,w:800}));
+  gl.appendChild(TX(681,40,'HEAD',{size:11,fill:COL.p5,w:800}));
+  gl.appendChild(TX(822,40,'OUTPUT',{size:11,fill:COL.gt,w:800}));
+}
+function setPyrFocus(svgId,groups){
+  const svg=document.getElementById(svgId);
+  svg.querySelectorAll('g[data-grp]').forEach(g=>{
+    g.setAttribute('opacity',groups.indexOf(g.getAttribute('data-grp'))>=0?'1':'0.15');});
+}
+
+/* ===================== ACT 3 ===================== */
+(function(){
+  function build3(){buildPyramid('pyr3');setPyrFocus('pyr3',['in','bb','core','lbl']);}
+  build3();
+  const svg=document.getElementById('dsfig');
+  const st=[{r:640,l:'INPUT'},{r:320,l:'P1',use:0},{r:160,l:'P2',use:0},
+            {r:80,l:'P3',c:COL.p3,use:1},{r:40,l:'P4',c:COL.p4,use:1},
+            {r:20,l:'P5',c:COL.p5,use:1}];
+  const baseY=152,x0=72,gap=172;
+  const L2=Math.log2;
+  function sideOf(r){return 28+(L2(r)-L2(20))/(L2(640)-L2(20))*76;}
+  const defs=E('defs',{});
+  const m=E('marker',{id:'dsA',markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(m);svg.appendChild(defs);
+  st.forEach((s,i)=>{
+    const cx=x0+i*gap,side=sideOf(s.r),col=s.c||(s.use===0?'#aab4c6':'#9aaac6');
+    if(i>0){
+      const pside=sideOf(st[i-1].r);
+      svg.appendChild(E('line',{x1:cx-gap+pside/2+4,y1:baseY-14,x2:cx-side/2-6,y2:baseY-14,
+        stroke:'#9aaac6','stroke-width':2,'marker-end':'url(#dsA)'}));
+      svg.appendChild(TX(cx-gap/2+14,baseY-26,'Conv s2 · ÷2',{size:9.5,fill:COL.accent}));
+    }
+    svg.appendChild(E('rect',{x:cx-side/2,y:baseY-side,width:side,height:side,rx:3,
+      fill:s.c?col:(s.use===0?'#e9edf4':'#dde6f6'),
+      'fill-opacity':s.c?0.2:0.7,stroke:col,'stroke-width':1.8,
+      'stroke-dasharray':s.use===0?'3 2':'0'}));
+    svg.appendChild(TX(cx,baseY+20,s.r+'×'+s.r,{size:12,fill:col,w:700}));
+    if(s.l==='INPUT')svg.appendChild(TX(cx,baseY+36,'input image',{size:9.5,fill:COL.muted}));
+    else svg.appendChild(TX(cx,baseY+36,s.l+(s.use===0?' (skipped)':' · used'),
+      {size:10.5,fill:col,w:800}));
+  });
+  svg.appendChild(TX(510,196,
+    'Squares use a compressed (log) scale so all six stay visible — the true ratio is 32:1.',
+    {size:10,fill:'#8b97ac'}));
+  addEventListener('resize',build3);
+})();
+
+/* ===================== ACT 4 — 3D receptive field ===================== */
+(function(){
+  const cv=document.getElementById('a4canvas');
+  const LV=[{n:'P1',stride:2, rf:14, eff:9,  col:'#9aa6bc',gridN:32},
+            {n:'P2',stride:4, rf:38, eff:24, col:'#5fa0c8',gridN:22},
+            {n:'P3',stride:8, rf:92, eff:52, col:COL.p3,   gridN:16},
+            {n:'P4',stride:16,rf:210,eff:120,col:COL.p4,   gridN:8},
+            {n:'P5',stride:32,rf:440,eff:250,col:COL.p5,   gridN:4}];
+  let lvl=2,obj=null,cellU=0.52,cellV=0.40;
+  // iso config
+  let O;
+  function setO(w){O={ox:w/2,oy:158,sx:0.60,sy:0.295,h:122,PS:248};}
+  function iso(u,v,layer){return{x:O.ox+(u-v)*O.sx,y:O.oy+(u+v)*O.sy-layer*O.h};}
+  function quad(c,p,fill,stroke,lw){
+    c.beginPath();c.moveTo(p[0].x,p[0].y);
+    for(let i=1;i<4;i++)c.lineTo(p[i].x,p[i].y);c.closePath();
+    if(fill){c.fillStyle=fill;c.fill();}
+    if(stroke){c.strokeStyle=stroke;c.lineWidth=lw||1;c.stroke();}
+  }
+  function render(){
+    const{c,w}=fit(cv,400);setO(w);c.clearRect(0,0,w,400);
+    const L=LV[lvl],PS=O.PS,N=L.gridN;
+    // ---- input plane (layer 0) with the image ----
+    const A=iso(0,0,0),B=iso(PS,0,0),D=iso(0,PS,0),Cc=iso(PS,PS,0);
+    const SCN=320;
+    const m=[(B.x-A.x)/SCN,(B.y-A.y)/SCN,(D.x-A.x)/SCN,(D.y-A.y)/SCN,A.x,A.y];
+    c.save();
+    c.setTransform(m[0]*DPR,m[1]*DPR,m[2]*DPR,m[3]*DPR,m[4]*DPR,m[5]*DPR);
+    scene(c,0,0,SCN,SCN,false);
+    c.restore();
+    quad(c,[A,B,Cc,D],null,'#9fb0cc',1.4);
+    // anchor point of selected cell in input coords (0..640)
+    const ax=cellU*640,ay=cellV*640;
+    // RF squares on input plane (plane coords 0..PS)
+    function inSq(half){
+      const u0=Math.max(0,(ax-half)/640*PS),u1=Math.min(PS,(ax+half)/640*PS),
+            v0=Math.max(0,(ay-half)/640*PS),v1=Math.min(PS,(ay+half)/640*PS);
+      return[iso(u0,v0,0),iso(u1,v0,0),iso(u1,v1,0),iso(u0,v1,0)];
+    }
+    const theo=inSq(L.rf/2),eff=inSq(L.eff/2);
+    quad(c,theo,L.col+'22',L.col,2);
+    quad(c,eff,L.col+'4d',null);
+    // object overlay (concentric with the cell anchor)
+    if(obj){
+      const os=inSq(obj/2);
+      quad(c,os,'rgba(255,82,82,.14)','#ff5252',2.2);
+    }
+    // ---- feature plane (layer 1) grid ----
+    c.strokeStyle='#c7d4ee';c.lineWidth=1;
+    for(let k=0;k<=N;k++){
+      let p1=iso(k/N*PS,0,1),p2=iso(k/N*PS,PS,1);
+      c.beginPath();c.moveTo(p1.x,p1.y);c.lineTo(p2.x,p2.y);c.stroke();
+      p1=iso(0,k/N*PS,1);p2=iso(PS,k/N*PS,1);
+      c.beginPath();c.moveTo(p1.x,p1.y);c.lineTo(p2.x,p2.y);c.stroke();
+    }
+    const fp=[iso(0,0,1),iso(PS,0,1),iso(PS,PS,1),iso(0,PS,1)];
+    quad(c,fp,'rgba(255,255,255,.30)','#9fb0cc',1.4);
+    // selected cell quad on feature plane
+    const ci=Math.floor(cellV*N),cj=Math.floor(cellU*N);
+    const cu0=cj/N*PS,cu1=(cj+1)/N*PS,cv0=ci/N*PS,cv1=(ci+1)/N*PS;
+    const cellQ=[iso(cu0,cv0,1),iso(cu1,cv0,1),iso(cu1,cv1,1),iso(cu0,cv1,1)];
+    quad(c,cellQ,L.col,'#fff',2);
+    // ---- cone : cell (layer1) -> theoretical RF (layer0) ----
+    c.strokeStyle=L.col;c.lineWidth=1.6;c.globalAlpha=.7;
+    for(let i=0;i<4;i++){
+      c.beginPath();c.moveTo(cellQ[i].x,cellQ[i].y);c.lineTo(theo[i].x,theo[i].y);c.stroke();
+    }
+    c.globalAlpha=1;
+    // labels
+    c.setTransform(DPR,0,0,DPR,0,0);
+    c.fillStyle=COL.muted;c.font='700 11px ui-sans-serif';c.textAlign='center';
+    c.fillText('feature map · '+L.n+' grid',iso(PS/2,0,1).x,iso(PS/2,0,1).y-10);
+    c.fillText('input image 640×640',iso(PS/2,PS,0).x,iso(PS/2,PS,0).y+22);
+    c.fillStyle=L.col;c.font='700 10px ui-sans-serif';
+    c.fillText('receptive field',theo[3].x,theo[3].y+14);
+    c.textAlign='left';
+    // info
+    const cells=obj?obj/L.stride:0;
+    let verdict='';
+    if(obj){
+      if(obj<L.stride*1.5)verdict='✗ object smaller than a cell — lost at this scale';
+      else if(obj>L.rf)verdict='✗ object larger than the RF — a cell sees only a fragment';
+      else verdict='✓ object fits the RF and spans enough cells — seen well';
+    }
+    document.getElementById('a4info').innerHTML=
+      '<b>'+L.n+'</b> · stride '+L.stride+' · grid '+(640/L.stride)+'² · '
+      +'receptive field ≈ <b style="color:'+L.col+'">'+L.rf+' px</b> (effective ≈ '+L.eff+' px)'
+      +(obj?(' &nbsp;|&nbsp; object '+obj+' px → '+verdict):
+        ' &nbsp;|&nbsp; pick an object size to compare');
+  }
+  // level buttons
+  const lc=document.getElementById('a4levels');
+  LV.forEach((L,i)=>{
+    const b=document.createElement('button');b.className='btn sm'+(i===lvl?' on':'');
+    b.textContent=L.n;
+    b.onclick=()=>{lvl=i;[...lc.children].forEach((x,k)=>x.className='btn sm'+(k===i?' on':''));
+      render();};
+    lc.appendChild(b);
+  });
+  // object buttons
+  const oc=document.getElementById('a4objs');
+  [['none',null],['small 30',30],['medium 150',150],['large 360',360]].forEach(([lab,v])=>{
+    const b=document.createElement('button');b.className='btn sm'+(v===obj?' on':'');
+    b.textContent=lab;
+    b.onclick=()=>{obj=v;[...oc.children].forEach(x=>x.className='btn sm');
+      b.className='btn sm on';render();};
+    oc.appendChild(b);
+  });
+  // click feature plane to move the cell
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const x=(e.clientX-r.left)*(cv.clientWidth/r.width);
+    const y=(e.clientY-r.top)*(400/r.height);
+    const diff=(x-O.ox)/O.sx, sum=(y-O.oy+O.h)/O.sy;
+    const u=(sum+diff)/2,v=(sum-diff)/2;
+    if(u>=0&&u<=O.PS&&v>=0&&v<=O.PS){cellU=u/O.PS;cellV=v/O.PS;render();}
+  });
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== ACT 5 — RetinaNet-style neck diagram ===================== */
+(function(){
+  const svg=document.getElementById('neckFig');
+  const SLAB={p3:{col:COL.p3,w:60,h:44},p4:{col:COL.p4,w:46,h:34},p5:{col:COL.p5,w:34,h:26}};
+  const RES={p3:'80²',p4:'40²',p5:'20²'};
+  const ROW={p5:132,p4:236,p3:340};
+  const CX={ctap:110,fpn:420,pan:668,head:858,out:976};
+  function build(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const defs=E('defs',{});
+    [['nG','#9aaac6'],['nF',COL.p3],['nP',COL.p4],['nO',COL.gt]].forEach(([id,c])=>{
+      const m=E('marker',{id:id,markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+      m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:c}));defs.appendChild(m);
+    });
+    svg.appendChild(defs);
+    function hline(x1,y,x2,col,mk){
+      svg.appendChild(E('path',{d:'M '+x1+' '+y+' L '+x2+' '+y,fill:'none',stroke:col,
+        'stroke-width':2.4,'marker-end':'url(#'+mk+')'}));
+    }
+    function vcurve(x,y1,y2,bow){
+      const cx=x+bow;
+      svg.appendChild(E('path',{d:'M '+x+' '+y1+' C '+cx+' '+y1+', '+cx+' '+y2+', '+x+' '+y2,
+        fill:'none',stroke:bow<0?COL.p3:COL.p4,'stroke-width':2.6,
+        'marker-end':'url(#'+(bow<0?'nF':'nP')+')'}));
+    }
+    function slab(x,y,lv,fuse){
+      const S=SLAB[lv];
+      svg.appendChild(E('rect',{x:x-S.w/2,y:y-S.h/2,width:S.w,height:S.h,rx:6,
+        fill:S.col+'2b',stroke:S.col,'stroke-width':2}));
+      svg.appendChild(TX(x,y+4,lv.toUpperCase(),{size:11,fill:S.col,w:800}));
+      if(fuse){
+        svg.appendChild(E('circle',{cx:x-S.w/2,cy:y-S.h/2,r:9.5,fill:'#fff',
+          stroke:'#7c3aed','stroke-width':1.8}));
+        svg.appendChild(TX(x-S.w/2,y-S.h/2+4.5,'+',{size:14,fill:'#7c3aed',w:800}));
+      }
+    }
+    const rows=['p5','p4','p3'];
+    // ----- backbone (faint context) -----
+    svg.appendChild(E('rect',{x:34,y:104,width:152,height:282,rx:12,
+      fill:'#eef2f9',stroke:'#cdd8ea','stroke-width':1.5,'stroke-dasharray':'5 4'}));
+    const dep=TX(48,245,'deeper →',{size:9,fill:'#9aa6bc',w:700});
+    dep.setAttribute('transform','rotate(-90 48 245)');svg.appendChild(dep);
+    // input
+    svg.appendChild(E('rect',{x:64,y:22,width:96,height:50,rx:7,fill:'#fff',
+      stroke:COL.muted,'stroke-width':1.6}));
+    svg.appendChild(E('rect',{x:71,y:29,width:82,height:28,fill:'#cfe0f6'}));
+    svg.appendChild(E('rect',{x:71,y:47,width:82,height:10,fill:'#c9d3c0'}));
+    svg.appendChild(TX(112,15,'INPUT 640²',{size:10,fill:COL.muted,w:800}));
+    svg.appendChild(E('path',{d:'M 112 72 L 112 102',fill:'none',stroke:'#9aaac6',
+      'stroke-width':2,'marker-end':'url(#nG)'}));
+    // C-tap nodes
+    rows.forEach(r=>{
+      const y=ROW[r];
+      svg.appendChild(E('rect',{x:CX.ctap-46,y:y-15,width:92,height:30,rx:6,
+        fill:'#fff',stroke:SLAB[r].col,'stroke-width':1.8}));
+      svg.appendChild(TX(CX.ctap,y+4,'C'+r[1]+' · '+RES[r],{size:11,fill:SLAB[r].col,w:800}));
+    });
+    svg.appendChild(TX(CX.ctap,400,'Backbone taps',{size:10,fill:'#8b97ac',w:700}));
+    // ----- lateral + horizontal flows -----
+    rows.forEach(r=>{
+      const y=ROW[r],sw=SLAB[r].w/2;
+      hline(CX.ctap+46,y,CX.fpn-sw-2,'#9aaac6','nG');           // C-tap -> FPN (lateral)
+      hline(CX.fpn+sw,y,CX.pan-sw-2,'#9aaac6','nG');            // FPN -> PAN
+      hline(CX.pan+sw,y,CX.head-32,COL.gt,'nO');                // PAN -> Head
+    });
+    // ----- FPN top-down -----
+    vcurve(CX.fpn,ROW.p5+SLAB.p5.h/2,ROW.p4-SLAB.p4.h/2,-66);
+    vcurve(CX.fpn,ROW.p4+SLAB.p4.h/2,ROW.p3-SLAB.p3.h/2,-66);
+    svg.appendChild(TX(CX.fpn-80,(ROW.p5+ROW.p4)/2+3,'upsample',{size:9,fill:COL.p3,w:700}));
+    svg.appendChild(TX(CX.fpn-80,(ROW.p4+ROW.p3)/2+3,'upsample',{size:9,fill:COL.p3,w:700}));
+    // ----- PAN bottom-up -----
+    vcurve(CX.pan,ROW.p3-SLAB.p3.h/2,ROW.p4+SLAB.p4.h/2,66);
+    vcurve(CX.pan,ROW.p4-SLAB.p4.h/2,ROW.p5+SLAB.p5.h/2,66);
+    svg.appendChild(TX(CX.pan+86,(ROW.p3+ROW.p4)/2+3,'downsample',{size:9,fill:COL.p4,w:700}));
+    svg.appendChild(TX(CX.pan+86,(ROW.p4+ROW.p5)/2+3,'downsample',{size:9,fill:COL.p4,w:700}));
+    // ----- slabs : FPN (P4,P3 fuse) · PAN (P5,P4 fuse) -----
+    slab(CX.fpn,ROW.p5,'p5',false);slab(CX.fpn,ROW.p4,'p4',true);slab(CX.fpn,ROW.p3,'p3',true);
+    slab(CX.pan,ROW.p5,'p5',true);slab(CX.pan,ROW.p4,'p4',true);slab(CX.pan,ROW.p3,'p3',false);
+    // ----- heads -----
+    rows.forEach(r=>{
+      const y=ROW[r];
+      svg.appendChild(E('rect',{x:CX.head-30,y:y-21,width:60,height:42,rx:7,
+        fill:'#fff',stroke:COL.p5,'stroke-width':1.8}));
+      svg.appendChild(TX(CX.head,y+4,'Head',{size:10.5,fill:COL.p5,w:800}));
+      svg.appendChild(E('path',{d:'M '+(CX.head+30)+' '+y+' C '+(CX.head+70)+' '+y+', '
+        +(CX.out-40)+' 236, '+(CX.out-38)+' 236',fill:'none',stroke:COL.gt,
+        'stroke-width':2,'marker-end':'url(#nO)'}));
+    });
+    // ----- output -----
+    svg.appendChild(E('rect',{x:CX.out-36,y:200,width:72,height:72,rx:8,fill:'#fff',
+      stroke:COL.gt,'stroke-width':1.8}));
+    svg.appendChild(E('rect',{x:CX.out-30,y:206,width:60,height:40,fill:'#cfe0f6'}));
+    svg.appendChild(E('rect',{x:CX.out-30,y:240,width:60,height:14,fill:'#c9d3c0'}));
+    [[-22,224,12,22,COL.p5],[-4,232,18,12,COL.p4],[16,212,9,9,COL.p3]].forEach(([dx,y,w,h,col])=>{
+      svg.appendChild(E('rect',{x:CX.out+dx,y:y,width:w,height:h,fill:'none',
+        stroke:col,'stroke-width':1.8}));});
+    // ----- headers / captions -----
+    svg.appendChild(TX(CX.ctap,90,'BACKBONE',{size:11,fill:'#8b97ac',w:800}));
+    svg.appendChild(TX(CX.fpn,90,'FPN ↓ top-down',{size:11,fill:COL.p3,w:800}));
+    svg.appendChild(TX(CX.pan,90,'PAN ↑ bottom-up',{size:11,fill:COL.p4,w:800}));
+    svg.appendChild(TX(CX.head,90,'HEAD',{size:11,fill:COL.p5,w:800}));
+    svg.appendChild(TX(CX.out,182,'OUTPUT',{size:11,fill:COL.gt,w:800}));
+    svg.appendChild(TX(CX.fpn,400,'semantics flows down',{size:10,fill:'#8b97ac'}));
+    svg.appendChild(TX(CX.pan,400,'localization flows up',{size:10,fill:'#8b97ac'}));
+    svg.appendChild(TX((CX.ctap+CX.fpn)/2,ROW.p5-26,'lateral',{size:9,fill:'#9aa6bc'}));
+  }
+  build();
+  addEventListener('resize',build);
+})();
+
+/* ===================== ACT 6 — full network (static) ===================== */
+(function(){
+  function build(){
+    buildPyramid('pyrFull');
+    setPyrFocus('pyrFull',['in','bb','core','neck','head','out','lbl']);
+  }
+  build();
+  addEventListener('resize',build);
+})();
+
+/* ===================== ACT 7 — 3D cell tensor ===================== */
+(function(){
+  const svg=document.getElementById('cell3d'),G=8;
+  let sel={i:4,j:5};
+  const CLASSES=['bird','car','person','dog','tree'];
+  function prng(s){let x=s%2147483647;if(x<=0)x+=2147483646;return()=>(x=x*16807%2147483647)/2147483647;}
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const ox=70,oy=100,side=224,dep=70,cell=side/G;
+    const C=9,f4=4/C;
+    function dp(X,Y,f){return [X+dep*f,Y-dep*f];}
+    function poly(pts,fill,strk){
+      svg.appendChild(E('polygon',{points:pts.map(p=>p[0]+','+p[1]).join(' '),
+        fill:fill,stroke:strk,'stroke-width':1}));
+    }
+    // top face : box zone (orange) then class zone (blue)
+    poly([[ox,oy],[ox+side,oy],dp(ox+side,oy,f4),dp(ox,oy,f4)],'#fdebc8','#f0c887');
+    poly([dp(ox,oy,f4),dp(ox+side,oy,f4),dp(ox+side,oy,1),dp(ox,oy,1)],'#dbe6fb','#bcccee');
+    // right side face : box zone then class zone
+    poly([[ox+side,oy],[ox+side,oy+side],dp(ox+side,oy+side,f4),dp(ox+side,oy,f4)],
+      '#fbe2bd','#eebf78');
+    poly([dp(ox+side,oy,f4),dp(ox+side,oy+side,f4),dp(ox+side,oy+side,1),dp(ox+side,oy,1)],
+      '#cad8f4','#aebfe4');
+    // 9 channel slices on the side face (k=4 = box|class boundary)
+    for(let k=1;k<C;k++){
+      const a=dp(ox+side,oy,k/C),b=dp(ox+side,oy+side,k/C),bd=(k===4);
+      svg.appendChild(E('line',{x1:a[0],y1:a[1],x2:b[0],y2:b[1],
+        stroke:bd?'#7c3aed':'#b7c6e8','stroke-width':bd?2:1}));
+    }
+    // front grid
+    for(let i=0;i<G;i++)for(let j=0;j<G;j++){
+      const isSel=(i===sel.i&&j===sel.j);
+      const r=E('rect',{x:ox+j*cell,y:oy+i*cell,width:cell,height:cell,
+        fill:isSel?'#2f6bff':'#fff',stroke:'#c3d2ef','stroke-width':1,style:'cursor:pointer'});
+      r.addEventListener('click',()=>{sel={i:i,j:j};render();});
+      svg.appendChild(r);
+    }
+    svg.appendChild(TX(ox+side/2,oy+side+24,'H × W grid of cells  =  80 × 80',
+      {size:11,fill:COL.muted}));
+    // depth-axis labels — C = 4 + 5
+    const bC=[ox+side/2+dep*f4/2,oy-dep*f4/2],
+          cC=[ox+side/2+dep*(f4+1)/2,oy-dep*(f4+1)/2];
+    svg.appendChild(TX(bC[0],bC[1]+3,'4 ch · box',{size:9.5,fill:'#b56f00',w:800}));
+    svg.appendChild(TX(cC[0],cC[1]+3,'5 ch · class',{size:9.5,fill:'#2f6bff',w:800}));
+    svg.appendChild(TX(ox+side+dep+10,oy-dep+4,'depth  C = 4 + 5 = 9 channels',
+      {size:10.5,fill:COL.ink,w:800,anchor:'start'}));
+    svg.appendChild(TX(ox+side/2,oy-dep-14,'Head output tensor  ·  80 × 80 × 9',
+      {size:12,fill:COL.ink,w:800}));
+    const r=prng(sel.i*53+sel.j*17+9);
+    const vx=560,vy=150,bw=42;
+    svg.appendChild(TX(vx-8,vy-30,'Cell ('+sel.i+', '+sel.j+') — its channel column:',
+      {size:12,fill:COL.ink,w:700,anchor:'start'}));
+    svg.appendChild(E('line',{x1:ox+sel.j*cell+cell,y1:oy+sel.i*cell+cell/2,
+      x2:vx,y2:vy+22,stroke:'#9aaac6','stroke-width':1.5,'stroke-dasharray':'4 3'}));
+    [['l'],['t'],['r'],['b']].forEach((L,k)=>{
+      svg.appendChild(E('rect',{x:vx+k*bw,y:vy,width:bw-3,height:46,rx:5,
+        fill:'#fff8ec',stroke:'#ffce8a','stroke-width':1.6}));
+      svg.appendChild(TX(vx+k*bw+(bw-3)/2,vy+19,L[0],{size:13,fill:'#b56f00',w:800}));
+      svg.appendChild(TX(vx+k*bw+(bw-3)/2,vy+37,(0.2+r()*0.7).toFixed(2),{size:10,fill:'#b56f00'}));
+    });
+    svg.appendChild(TX(vx+4*bw/2,vy+64,'box  (l, t, r, b) — edge distances',
+      {size:10.5,fill:'#b56f00',w:700}));
+    const top=Math.floor(r()*CLASSES.length);
+    CLASSES.forEach((cl,k)=>{
+      const x=vx+4*bw+12+k*bw,isTop=k===top;
+      svg.appendChild(E('rect',{x:x,y:vy,width:bw-3,height:46,rx:5,
+        fill:isTop?'#2f6bff':'#eef3ff',stroke:isTop?'#2f6bff':'#bcd0ff','stroke-width':1.6}));
+      svg.appendChild(TX(x+(bw-3)/2,vy+19,cl.slice(0,4),
+        {size:9.5,fill:isTop?'#fff':'#2f6bff',w:700}));
+      svg.appendChild(TX(x+(bw-3)/2,vy+37,(isTop?(0.78+r()*0.18):(r()*0.08)).toFixed(2),
+        {size:10,fill:isTop?'#fff':'#2f6bff'}));
+    });
+    svg.appendChild(TX(vx+4*bw+12+CLASSES.length*bw/2,vy+64,'class scores',
+      {size:10.5,fill:COL.p3,w:700}));
+    svg.appendChild(TX(vx,vy+108,'First 4 channels = the box · the rest = one score per class.',
+      {size:11.5,fill:COL.muted,anchor:'start'}));
+  }
+  render();
+})();
+
+/* ===================== ACT 7 — interactive l,t,r,b decode ===================== */
+(function(){
+  const svg=document.getElementById('ltrbFig');
+  const N=11,cell=36,ox=37,oy=22;
+  const selC=5,selR=5,aX=selC+0.5,aY=selR+0.5;
+  let v={l:2.4,t:1.6,r:3.2,b:2.0},stride=16,level='P4';
+  function gx(c){return ox+c*cell;}
+  function gy(r){return oy+r*cell;}
+  function render(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const defs=E('defs',{});
+    const mk=E('marker',{id:'ltA',markerWidth:7,markerHeight:7,refX:5.4,refY:3,orient:'auto'});
+    mk.appendChild(E('path',{d:'M0,0 L5.4,3 L0,6 Z',fill:'#ff8a00'}));
+    defs.appendChild(mk);svg.appendChild(defs);
+    for(let c=0;c<=N;c++)
+      svg.appendChild(E('line',{x1:gx(c),y1:oy,x2:gx(c),y2:gy(N),
+        stroke:'#e3eaf8','stroke-width':1}));
+    for(let r=0;r<=N;r++)
+      svg.appendChild(E('line',{x1:ox,y1:gy(r),x2:gx(N),y2:gy(r),
+        stroke:'#e3eaf8','stroke-width':1}));
+    for(let c=0;c<N;c+=2)svg.appendChild(TX(gx(c)+cell/2,oy-7,c,{size:8.5,fill:'#aab4c6'}));
+    for(let r=0;r<N;r+=2)svg.appendChild(TX(ox-9,gy(r)+cell/2+3,r,{size:8.5,fill:'#aab4c6'}));
+    svg.appendChild(E('rect',{x:gx(selC),y:gy(selR),width:cell,height:cell,
+      fill:'#2f6bff','fill-opacity':0.10}));
+    const bx0=aX-v.l,by0=aY-v.t,bx1=aX+v.r,by1=aY+v.b;
+    svg.appendChild(E('rect',{x:gx(bx0),y:gy(by0),width:(v.l+v.r)*cell,height:(v.t+v.b)*cell,
+      fill:'rgba(47,107,255,.10)',stroke:'#2f6bff','stroke-width':2.6}));
+    svg.appendChild(TX(gx((bx0+bx1)/2),gy(by0)-8,'predicted box',{size:10,fill:'#2f6bff',w:800}));
+    function ray(x2,y2){
+      svg.appendChild(E('line',{x1:gx(aX),y1:gy(aY),x2:x2,y2:y2,
+        stroke:'#ff8a00','stroke-width':2.6,'marker-end':'url(#ltA)'}));
+    }
+    ray(gx(bx0),gy(aY));ray(gx(aX),gy(by0));ray(gx(bx1),gy(aY));ray(gx(aX),gy(by1));
+    function lab(x,y,txt){
+      svg.appendChild(E('rect',{x:x-21,y:y-9,width:42,height:17,rx:4,
+        fill:'#fff7ec',stroke:'#ffce8a','stroke-width':1}));
+      svg.appendChild(TX(x,y+3.5,txt,{size:9.5,fill:'#b56f00',w:800}));
+    }
+    lab((gx(aX)+gx(bx0))/2,gy(aY)-13,'l '+v.l.toFixed(1));
+    lab((gx(aX)+gx(bx1))/2,gy(aY)-13,'r '+v.r.toFixed(1));
+    lab(gx(aX)+26,(gy(aY)+gy(by0))/2,'t '+v.t.toFixed(1));
+    lab(gx(aX)+26,(gy(aY)+gy(by1))/2,'b '+v.b.toFixed(1));
+    svg.appendChild(E('circle',{cx:gx(aX),cy:gy(aY),r:5.5,fill:'#0b1b34',
+      stroke:'#fff','stroke-width':2}));
+    svg.appendChild(TX(gx(N/2),gy(N)+19,
+      'anchor of cell ('+selC+', '+selR+') = ('+aX+', '+aY+') in cell units · 4 rays = l, t, r, b',
+      {size:10,fill:COL.muted}));
+    svg.appendChild(TX(gx(N/2),gy(N)+35,
+      'grid is identical for every level — switching P3/P4/P5 changes only the decode below',
+      {size:10,fill:COL.accent,w:700}));
+  }
+  function updateDecode(){
+    const d=document.getElementById('ltrbDecode');
+    const x1=(aX-v.l)*stride,y1=(aY-v.t)*stride,x2=(aX+v.r)*stride,y2=(aY+v.b)*stride;
+    function eq(nm,a,op,dist,res){
+      return nm+' = ('+a+' '+op+' <span class="c4">'+dist.toFixed(1)+'</span>) × '+stride
+        +' = <b>'+res.toFixed(0)+'</b>';
+    }
+    d.innerHTML=
+      '<span style="color:#61708a">anchor = ('+aX+', '+aY+') cells &nbsp;·&nbsp; stride '
+      +stride+' ('+level+')</span><br>'+
+      eq('x1',aX,'−',v.l,x1)+'<br>'+
+      eq('y1',aY,'−',v.t,y1)+'<br>'+
+      eq('x2',aX,'+',v.r,x2)+'<br>'+
+      eq('y2',aY,'+',v.b,y2)+'<br>'+
+      '<span style="color:#2f6bff;font-weight:800">→ box on 640 grid:<br>('
+      +x1.toFixed(0)+', '+y1.toFixed(0)+', '+x2.toFixed(0)+', '+y2.toFixed(0)+')'
+      +' &nbsp;·&nbsp; '+(x2-x1).toFixed(0)+' × '+(y2-y1).toFixed(0)+' px</span>';
+  }
+  function flashDecode(){
+    const d=document.getElementById('ltrbDecode');
+    d.classList.remove('flash-decode');void d.offsetWidth;d.classList.add('flash-decode');
+  }
+  function refresh(){
+    render();updateDecode();
+    ['l','t','r','b'].forEach(k=>{
+      const el=document.getElementById('ltv_'+k);if(el)el.textContent=v[k].toFixed(1);
+    });
+  }
+  function buildSliders(){
+    const wrap=document.getElementById('ltrbSliders');wrap.innerHTML='';
+    [['l','left'],['t','top'],['r','right'],['b','bottom']].forEach(([k,desc])=>{
+      const d=document.createElement('div');
+      d.innerHTML='<div class="ctl-label"><span><span class="mono" '+
+        'style="color:#ff8a00;font-weight:800">'+k+'</span> · '+desc+' distance</span>'+
+        '<b id="ltv_'+k+'"></b></div>'+
+        '<input type="range" id="lts_'+k+'" min="0.2" max="4" step="0.1" value="'+v[k]+'" '+
+        'style="width:100%;margin:7px 0 0">';
+      wrap.appendChild(d);
+    });
+    ['l','t','r','b'].forEach(k=>{
+      document.getElementById('lts_'+k).oninput=e=>{v[k]=+e.target.value;refresh();};
+    });
+  }
+  const sc=document.getElementById('ltrbStride');
+  [['P3 · ÷8',8,'P3'],['P4 · ÷16',16,'P4'],['P5 · ÷32',32,'P5']].forEach(([lab,st,lv])=>{
+    const b=document.createElement('button');
+    b.className='btn sm'+(st===stride?' on':'');
+    b.textContent=lab;
+    b.onclick=()=>{stride=st;level=lv;[...sc.children].forEach(x=>x.className='btn sm');
+      b.className='btn sm on';updateDecode();flashDecode();};
+    sc.appendChild(b);
+  });
+  buildSliders();refresh();
+})();
+
+/* ===================== ACT 7 — cell count (8400) ===================== */
+(function(){
+  const svg=document.getElementById('cellCount');
+  const grids=[{x:158,div:16,col:COL.p3,n:'P3 · 80×80',c:'6400'},
+               {x:402,div:8, col:COL.p4,n:'P4 · 40×40',c:'1600'},
+               {x:606,div:4, col:COL.p5,n:'P5 · 20×20',c:'400'}];
+  const sz=104,top=26;
+  grids.forEach((g,i)=>{
+    const x0=g.x-sz/2;
+    svg.appendChild(E('rect',{x:x0,y:top,width:sz,height:sz,rx:4,
+      fill:g.col+'18',stroke:g.col,'stroke-width':2}));
+    const gg=E('g',{stroke:g.col,'stroke-opacity':0.4,'stroke-width':1});
+    for(let k=1;k<g.div;k++){
+      gg.appendChild(E('line',{x1:x0+sz*k/g.div,y1:top,x2:x0+sz*k/g.div,y2:top+sz}));
+      gg.appendChild(E('line',{x1:x0,y1:top+sz*k/g.div,x2:x0+sz,y2:top+sz*k/g.div}));
+    }
+    svg.appendChild(gg);
+    svg.appendChild(TX(g.x,top+sz+22,g.n,{size:12.5,fill:g.col,w:800}));
+    svg.appendChild(TX(g.x,top+sz+42,g.c+' cells',{size:13,fill:COL.ink,w:700}));
+    if(i<2)svg.appendChild(TX((g.x+grids[i+1].x)/2,top+sz/2+9,'+',{size:28,fill:COL.muted}));
+  });
+  svg.appendChild(TX(726,top+sz/2+9,'=',{size:28,fill:COL.muted}));
+  svg.appendChild(TX(862,top+sz/2+2,'8400',{size:42,fill:'#2f6bff',w:800}));
+  svg.appendChild(TX(862,top+sz/2+28,'cells in total',{size:13,fill:COL.muted}));
+  svg.appendChild(TX(862,top+sz+22,'one prediction per cell',{size:11,fill:'#8b97ac'}));
+})();
+
+
+/* ===================== ACT 7 — GT-box coordinate chain (bidirectional) ===================== */
+(function(){
+  const svg=document.getElementById('coordChain');
+  const BOX={small :{ox:520,oy:400,ow:200,oh:120},
+             medium:{ox:480,oy:360,ow:320,oh:160},
+             large :{ox:240,oy:180,ow:760,oh:560}};
+  let cur='medium', dir='fwd', srcG=1;
+  const IMG={w:1280,h:960}, r=0.5, padY=80;
+  const LV=[{n:'P3',stride:8, G:80,col:COL.p3},
+            {n:'P4',stride:16,G:40,col:COL.p4},
+            {n:'P5',stride:32,G:20,col:COL.p5}];
+
+  function scenelet(x,y,w,h){
+    svg.appendChild(E('rect',{x:x,y:y,width:w,height:h*0.62,fill:'#cfe0f6'}));
+    svg.appendChild(E('rect',{x:x,y:y+h*0.62,width:w,height:h*0.38,fill:'#c9d3c0'}));
+  }
+  function cap(cx,y,big,sub,dim){
+    svg.appendChild(TX(cx,y,big,{size:11.5,fill:dim?'#9aa6bc':COL.ink,w:800}));
+    if(sub)svg.appendChild(TX(cx,y+16,sub,{size:9.5,fill:dim?'#b3bccd':COL.muted,w:600}));
+  }
+  function tri(cx,cy,down,col){
+    const d=down?'M '+(cx-8)+' '+(cy-7)+' L '+(cx+8)+' '+(cy-7)+' L '+cx+' '+(cy+7)+' Z'
+                :'M '+(cx-8)+' '+(cy+7)+' L '+(cx+8)+' '+(cy+7)+' L '+cx+' '+(cy-7)+' Z';
+    svg.appendChild(E('path',{d:d,fill:col}));
+  }
+
+  function build(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    const defs=E('defs',{});
+    const mk=(id,c)=>{const m=E('marker',{id:id,markerWidth:9,markerHeight:9,
+      refX:6.8,refY:3,orient:'auto'});
+      m.appendChild(E('path',{d:'M0,0 L7,3 L0,6 Z',fill:c}));defs.appendChild(m);};
+    mk('ccAo',COL.accent);mk('ccAb',COL.p3);
+    svg.appendChild(defs);
+
+    const fwd=(dir==='fwd');
+    const boxCol = fwd?COL.gt:COL.p3;
+    const boxFill= fwd?'rgba(46,204,113,.22)':'rgba(47,107,255,.16)';
+    const flow   = fwd?COL.accent:COL.p3;
+    const mkEnd  = fwd?'url(#ccAo)':'url(#ccAb)';
+    const B=BOX[cur];
+    const L={x:B.ox*r,y:B.oy*r+padY,w:B.ow*r,h:B.oh*r};
+
+    // mode title
+    svg.appendChild(TX(510,22,
+      fwd?'Mapping a GT box onto the grid  ·  ÷ stride'
+         :'Decoding a predicted box back to pixels  ·  × stride',
+      {size:12.5,fill:flow,w:800}));
+
+    const ay=46,aw=216,ah=162,ax=283,bs=162,bx=575;
+    const gy=304,gs=150,gx0=237,ggap=48;
+    const gcx=[0,1,2].map(i=>gx0+i*(gs+ggap)+gs/2);
+
+    // ---- panel ① original ----
+    scenelet(ax,ay,aw,ah);
+    svg.appendChild(E('rect',{x:ax,y:ay,width:aw,height:ah,fill:'none',stroke:'#9fb0cc'}));
+    svg.appendChild(E('rect',{x:ax+aw*(B.ox/IMG.w),y:ay+ah*(B.oy/IMG.h),
+      width:aw*(B.ow/IMG.w),height:ah*(B.oh/IMG.h),
+      fill:boxFill,stroke:boxCol,'stroke-width':2.4}));
+    if(fwd){
+      svg.appendChild(E('rect',{x:ax-5,y:ay-5,width:aw+10,height:ah+10,rx:6,fill:'none',
+        stroke:flow,'stroke-width':2,'stroke-dasharray':'5 4'}));
+      svg.appendChild(TX(ax+aw/2,ay-13,'start here',{size:9.5,fill:flow,w:800}));
+    }
+    cap(ax+aw/2,ay+ah+20,'① Original image · 1280 × 960',
+      'box (px): x '+B.ox+' · y '+B.oy+' · w '+B.ow+' · h '+B.oh);
+
+    // ---- panel ② letterboxed 640 ----
+    svg.appendChild(E('rect',{x:bx,y:ay,width:bs,height:bs,fill:'#e9edf4',stroke:'#9fb0cc'}));
+    scenelet(bx,ay+bs*0.125,bs,bs*0.75);
+    svg.appendChild(E('rect',{x:bx,y:ay,width:bs,height:bs,fill:'none',stroke:'#9fb0cc'}));
+    svg.appendChild(E('rect',{x:bx+bs*(L.x/640),y:ay+bs*(L.y/640),
+      width:bs*(L.w/640),height:bs*(L.h/640),
+      fill:boxFill,stroke:boxCol,'stroke-width':2.4}));
+    cap(bx+bs/2,ay+bs+20,'② Letterboxed · 640 × 640',
+      'box (px): x '+L.x+' · y '+L.y+' · w '+L.w+' · h '+L.h);
+
+    // ---- arrow ① <-> ② ----
+    const midY=ay+ah/2,gapL=ax+aw+8,gapR=bx-8,gMid=(gapL+gapR)/2;
+    if(fwd){
+      svg.appendChild(E('path',{d:'M '+gapL+' '+midY+' L '+gapR+' '+midY,fill:'none',
+        stroke:flow,'stroke-width':2.2,'marker-end':mkEnd}));
+      svg.appendChild(TX(gMid,midY-9,'letterbox',{size:10,fill:flow,w:800}));
+      svg.appendChild(TX(gMid,midY+15,'× r, pad',{size:9,fill:COL.muted}));
+    }else{
+      svg.appendChild(E('path',{d:'M '+gapR+' '+midY+' L '+gapL+' '+midY,fill:'none',
+        stroke:flow,'stroke-width':2.2,'marker-end':mkEnd}));
+      svg.appendChild(TX(gMid,midY-9,'undo letterbox',{size:10,fill:flow,w:800}));
+      svg.appendChild(TX(gMid,midY+15,'÷ r, un-pad',{size:9,fill:COL.muted}));
+    }
+
+    // ---- row connector : ÷ / × stride ----
+    svg.appendChild(TX(510,258,fwd?'÷ stride':'× stride',{size:11.5,fill:flow,w:800}));
+    svg.appendChild(TX(510,272,
+      fwd?'P3 ÷ 8 · P4 ÷ 16 · P5 ÷ 32':'P3 × 8 · P4 × 16 · P5 × 32',
+      {size:9,fill:COL.muted}));
+    if(fwd) gcx.forEach(cx=>tri(cx,288,true,flow));
+    else    tri(gcx[srcG],288,false,flow);
+
+    // ---- panels ③ three grids ----
+    LV.forEach((lv,i)=>{
+      const gx=gx0+i*(gs+ggap),uu=gs/lv.G;
+      const isSrc=(!fwd&&i===srcG),faded=(!fwd&&i!==srcG);
+      const cx0=L.x/lv.stride,cy0=L.y/lv.stride,cw=L.w/lv.stride,ch=L.h/lv.stride;
+      const colMin=Math.ceil(cx0-0.5),colMax=Math.floor(cx0+cw-0.5),
+            rowMin=Math.ceil(cy0-0.5),rowMax=Math.floor(cy0+ch-0.5);
+      const has=(colMax>=colMin&&rowMax>=rowMin);
+      const nC=has?(colMax-colMin+1)*(rowMax-rowMin+1):0;
+      const g=E('g',{opacity:faded?0.34:1});
+      if(fwd&&has)g.appendChild(E('rect',{x:gx+colMin*uu,y:gy+rowMin*uu,
+        width:(colMax-colMin+1)*uu,height:(rowMax-rowMin+1)*uu,
+        fill:lv.col,'fill-opacity':0.24}));
+      for(let k=0;k<=lv.G;k+=4){
+        g.appendChild(E('line',{x1:gx+k*uu,y1:gy,x2:gx+k*uu,y2:gy+gs,
+          stroke:'#dde6f6','stroke-width':0.7}));
+        g.appendChild(E('line',{x1:gx,y1:gy+k*uu,x2:gx+gs,y2:gy+k*uu,
+          stroke:'#dde6f6','stroke-width':0.7}));
+      }
+      g.appendChild(E('rect',{x:gx,y:gy,width:gs,height:gs,fill:'none',stroke:'#9fb0cc'}));
+      g.appendChild(E('rect',{x:gx+cx0*uu,y:gy+cy0*uu,width:cw*uu,height:ch*uu,
+        fill:isSrc?boxFill:'none',stroke:boxCol,'stroke-width':2.2}));
+      svg.appendChild(g);
+      cap(gx+gs/2,gy+gs+20,lv.n+' · '+lv.G+'² · stride '+lv.stride,
+        fwd?('GT ≈ '+cw.toFixed(1)+' × '+ch.toFixed(1)+' cells · '+nC+
+             ' candidate'+(nC===1?'':'s'))
+           :('box ≈ '+cw.toFixed(1)+' × '+ch.toFixed(1)+' cells'),faded);
+      if(isSrc){
+        svg.appendChild(E('rect',{x:gx-5,y:gy-5,width:gs+10,height:gs+10,rx:6,fill:'none',
+          stroke:flow,'stroke-width':2,'stroke-dasharray':'5 4'}));
+        svg.appendChild(TX(gx+34,gy-13,'start here',{size:9.5,fill:flow,w:800}));
+      }
+    });
+  }
+
+  const dirHost=document.getElementById('ccDir');
+  const boxHost=document.getElementById('ccBtns');
+  const gridHost=document.getElementById('ccGrid');
+  const note=document.getElementById('ccNote');
+  function refresh(){
+    [...dirHost.children].forEach(b=>b.classList.toggle('on',b.dataset.v===dir));
+    [...boxHost.children].forEach(b=>b.classList.toggle('on',b.dataset.v===cur));
+    [...gridHost.children].forEach(b=>{
+      b.classList.toggle('on',dir==='rev'&&+b.dataset.v===srcG);
+      b.style.opacity=(dir==='fwd')?'0.4':'1';
+      b.style.pointerEvents=(dir==='fwd')?'none':'auto';
+    });
+    note.textContent=(dir==='fwd')
+      ? 'Forward (÷ stride): one GT box in pixels is mapped onto all three grids — shaded cells are the candidates that fall inside it.'
+      : 'Reverse (× stride): a predicted box from one cell on the chosen grid is decoded back to 640 px and the original image — this is the decode step.';
+    build();
+  }
+  [['Map GT → grid','fwd'],['Decode → pixels','rev']].forEach(([lab,v])=>{
+    const b=document.createElement('button');b.className='btn sm';b.textContent=lab;
+    b.dataset.v=v;b.onclick=()=>{dir=v;refresh();};dirHost.appendChild(b);});
+  [['Small','small'],['Medium','medium'],['Large','large']].forEach(([lab,v])=>{
+    const b=document.createElement('button');b.className='btn sm';b.textContent=lab;
+    b.dataset.v=v;b.onclick=()=>{cur=v;refresh();};boxHost.appendChild(b);});
+  [['P3','0'],['P4','1'],['P5','2']].forEach(([lab,v])=>{
+    const b=document.createElement('button');b.className='btn sm';b.textContent=lab;
+    b.dataset.v=v;b.onclick=()=>{srcG=+v;refresh();};gridHost.appendChild(b);});
+  refresh();
+  addEventListener('resize',build);
+})();
+
+/* ===================== ACT 7 — interactive label assignment ===================== */
+(function(){
+  const svg=document.getElementById('assignFig');
+  const G=14,ox=14,oy=14,side=212,cell=side/G;
+  const gx0=3,gx1=11,gy0=3,gy1=12;
+  const A=0.5,B=6;
+  const CLS=['bird','car','person','dog'],GTI=1;
+  const C=[{id:'A',col:'#7c3aed',cx:6,cy:5,s:0.90,u:0.86,ch:[0.08,null,0.12,0.70]},
+           {id:'B',col:'#2f6bff',cx:9,cy:9,s:0.64,u:0.72,ch:[0.10,null,0.66,0.14]},
+           {id:'C',col:'#ff8a00',cx:5,cy:10,s:0.96,u:0.40,ch:[0.74,null,0.09,0.11]}];
+  function draw(posIds){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    for(let i=0;i<=G;i++){
+      svg.appendChild(E('line',{x1:ox+i*cell,y1:oy,x2:ox+i*cell,y2:oy+side,
+        stroke:'#e3eaf8','stroke-width':1}));
+      svg.appendChild(E('line',{x1:ox,y1:oy+i*cell,x2:ox+side,y2:oy+i*cell,
+        stroke:'#e3eaf8','stroke-width':1}));
+    }
+    for(let i=gy0;i<gy1;i++)for(let j=gx0;j<gx1;j++){
+      svg.appendChild(E('rect',{x:ox+j*cell,y:oy+i*cell,width:cell,height:cell,
+        fill:'#2f6bff','fill-opacity':0.07}));
+    }
+    C.forEach(c=>{
+      const isPos=posIds.indexOf(c.id)>=0;
+      svg.appendChild(E('rect',{x:ox+c.cx*cell+1,y:oy+c.cy*cell+1,width:cell-2,height:cell-2,
+        rx:2,fill:isPos?c.col:'#fff',stroke:c.col,'stroke-width':2}));
+      svg.appendChild(TX(ox+c.cx*cell+cell/2,oy+c.cy*cell+cell/2+4,c.id,
+        {size:10,fill:isPos?'#fff':c.col,w:800}));
+    });
+    svg.appendChild(E('rect',{x:ox+gx0*cell,y:oy+gy0*cell,width:(gx1-gx0)*cell,
+      height:(gy1-gy0)*cell,fill:'none',stroke:COL.gt,'stroke-width':2.4}));
+    svg.appendChild(TX(ox+gx0*cell+1,oy+gy0*cell-4,'GT box',
+      {size:9.5,fill:COL.gt,w:800,anchor:'start'}));
+  }
+  function buildCards(){
+    const wrap=document.getElementById('a7cards');wrap.innerHTML='';
+    C.forEach((c,i)=>{
+      const d=document.createElement('div');d.className='mini';d.id='a7card'+i;
+      d.style.cssText='padding:12px 14px';
+      d.innerHTML=
+        '<div style="display:flex;align-items:center;gap:7px;font-weight:700;font-size:13.5px">'+
+          '<span class="dot" style="background:'+c.col+'"></span>Candidate '+c.id+
+          '<span id="a7badge'+i+'" style="margin-left:auto;font-size:11px;'+
+          'font-weight:800"></span></div>'+
+        '<div style="font-size:10px;color:#61708a;margin-top:9px">Class scores — '+
+          '<b style="color:'+c.col+'">s</b> = the "car" channel, not the tallest bar</div>'+
+        '<svg id="a7chan'+i+'" viewBox="0 0 232 54" '+
+          'style="width:100%;max-width:300px;height:auto;margin-top:3px"></svg>'+
+        '<div id="a7chnote'+i+'" style="font-size:9.5px;color:#8b97ac;'+
+          'line-height:1.4;margin-top:1px"></div>'+
+        '<div style="margin-top:9px"><div class="ctl-label">'+
+          '<span>s · drag the "car" channel</span><b id="a7sv'+i+'"></b></div>'+
+          '<input type="range" id="a7s'+i+'" min="0" max="1" step="0.01" value="'+c.s+'"></div>'+
+        '<div style="display:flex;align-items:center;gap:11px;margin-top:11px">'+
+          '<svg id="a7iou'+i+'" viewBox="0 0 72 46" '+
+            'style="width:62px;height:auto;flex-shrink:0"></svg>'+
+          '<div style="flex:1;min-width:0"><div class="ctl-label">'+
+            '<span>u · IoU overlap</span><b id="a7uv'+i+'"></b></div>'+
+            '<input type="range" id="a7u'+i+'" min="0" max="1" step="0.01" '+
+            'value="'+c.u+'"></div></div>'+
+        '<div style="display:flex;align-items:center;gap:9px;margin-top:11px;'+
+          'padding-top:9px;border-top:1px solid #e6ecf7">'+
+          '<span class="mono" style="font-size:11px;color:#61708a;white-space:nowrap">'+
+          't = s<sup>0.5</sup>·u<sup>6</sup> =</span>'+
+          '<span class="mono" id="a7t'+i+'" style="font-size:16px;font-weight:800;'+
+          'color:#0b1b34"></span>'+
+          '<div class="track" style="flex:1"><i id="a7bar'+i+'"></i></div></div>';
+      wrap.appendChild(d);
+    });
+    C.forEach((c,i)=>{
+      document.getElementById('a7s'+i).oninput=e=>{c.s=+e.target.value;update();};
+      document.getElementById('a7u'+i).oninput=e=>{c.u=+e.target.value;update();};
+    });
+  }
+  function drawIoU(i,c){
+    const s=document.getElementById('a7iou'+i);
+    while(s.firstChild)s.removeChild(s.firstChild);
+    const gx=10,gy=8,gw=52,gh=30;
+    s.appendChild(E('rect',{x:gx,y:gy,width:gw,height:gh,fill:'rgba(46,204,113,.16)',
+      stroke:COL.gt,'stroke-width':1.6}));
+    const k=Math.sqrt(Math.max(0.02,c.u)),pw=gw*k,ph=gh*k;
+    s.appendChild(E('rect',{x:gx+(gw-pw)/2,y:gy+(gh-ph)/2,width:pw,height:ph,
+      fill:c.col+'30',stroke:c.col,'stroke-width':1.6,'stroke-dasharray':'3 2'}));
+  }
+  function chMax(c){
+    const v=CLS.map((nm,k)=>k===GTI?c.s:c.ch[k]);
+    let am=0;v.forEach((x,k)=>{if(x>v[am])am=k;});
+    return {idx:am,val:v[am],vals:v};
+  }
+  function drawChan(i,c){
+    const sv=document.getElementById('a7chan'+i);
+    while(sv.firstChild)sv.removeChild(sv.firstChild);
+    const y0=34,maxH=24,x0=16,bw=34,step=55,m=chMax(c);
+    sv.appendChild(E('rect',{x:x0+GTI*step-3,y:1,width:bw+6,height:51,rx:3,
+      fill:c.col,'fill-opacity':0.08}));
+    sv.appendChild(E('line',{x1:10,y1:y0,x2:222,y2:y0,stroke:'#cdd7e6','stroke-width':1}));
+    CLS.forEach((nm,k)=>{
+      const bx=x0+k*step,v=m.vals[k],bh=Math.max(3,v*maxH),isGT=(k===GTI);
+      sv.appendChild(E('rect',{x:bx,y:y0-bh,width:bw,height:bh,rx:2,
+        fill:isGT?c.col:'#c3cdde'}));
+      sv.appendChild(TX(bx+bw/2,y0-bh-3,v.toFixed(2),
+        {size:8,fill:isGT?c.col:'#8b97ac',w:isGT?800:600}));
+      sv.appendChild(TX(bx+bw/2,y0+13,isGT?(nm+' = s'):nm,
+        {size:9,fill:isGT?c.col:'#8b97ac',w:isGT?800:600}));
+    });
+  }
+  function update(){
+    C.forEach(c=>c.t=Math.pow(c.s,A)*Math.pow(c.u,B));
+    const maxT=Math.max.apply(null,C.map(c=>c.t).concat(1e-6));
+    const ranked=C.slice().sort((a,b)=>b.t-a.t);
+    const rankOf={};ranked.forEach((c,r)=>rankOf[c.id]=r+1);
+    const K=2,posIds=ranked.slice(0,K).map(c=>c.id);
+    C.forEach((c,i)=>{
+      const isPos=posIds.indexOf(c.id)>=0;
+      document.getElementById('a7sv'+i).textContent=c.s.toFixed(2);
+      document.getElementById('a7uv'+i).textContent=c.u.toFixed(2);
+      document.getElementById('a7t'+i).textContent=c.t.toFixed(3);
+      document.getElementById('a7bar'+i).style.width=(c.t/maxT*100)+'%';
+      document.getElementById('a7card'+i).style.outline=isPos?'2px solid '+c.col:'none';
+      const bd=document.getElementById('a7badge'+i);
+      bd.textContent='#'+rankOf[c.id]+(isPos?' · positive ★':' · background');
+      bd.style.color=isPos?'#1a7d44':'#8b97ac';
+      drawIoU(i,c);drawChan(i,c);
+      const m=chMax(c);
+      document.getElementById('a7chnote'+i).innerHTML=(m.idx===GTI)
+        ? '<b style="color:'+c.col+'">car</b> is the tallest here — s = the argmax'
+        : 'tallest = <b>'+CLS[m.idx]+'</b> ('+m.val.toFixed(2)+
+          '), but s reads <b style="color:'+c.col+'">car</b> — argmax \u2260 s';
+    });
+    draw(posIds);
+  }
+  const PRE={step0:[[0.13,0.09],[0.10,0.12],[0.15,0.07]],
+             trained:[[0.90,0.86],[0.64,0.72],[0.96,0.40]]};
+  const pc=document.getElementById('a7presets');
+  [['Step 0 (random)','step0'],['Trained','trained']].forEach(([lab,k])=>{
+    const b=document.createElement('button');
+    b.className='btn sm'+(k==='trained'?' on':'');
+    b.textContent=lab;
+    b.onclick=()=>{
+      C.forEach((c,i)=>{c.s=PRE[k][i][0];c.u=PRE[k][i][1];});
+      [...pc.children].forEach(x=>x.className='btn sm');
+      b.className='btn sm on';
+      buildCards();update();
+    };
+    pc.appendChild(b);
+  });
+  buildCards();update();
+})();
+
+/* ===================== ACT 7 — where s comes from ===================== */
+(function(){
+  const svg=document.getElementById('sFig');
+  const names=['l','t','r','b','bird','car','person','dog','tree'];
+  const vals=[2.4,1.8,3.1,2.0,0.05,0.91,0.07,0.03,0.06];
+  const n=9,bw=64,gap=7,bh=50;
+  const startX=(1020-(n*bw+(n-1)*gap))/2,y=86,gtIdx=5;
+  const defs=E('defs',{});
+  const m=E('marker',{id:'sfA',markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:COL.accent}));
+  defs.appendChild(m);svg.appendChild(defs);
+  svg.appendChild(TX(510,28,'One cell\u2019s channel column — 9 values',
+    {size:12.5,fill:COL.ink,w:800}));
+  const cxGT=startX+gtIdx*(bw+gap)+bw/2;
+  svg.appendChild(E('rect',{x:cxGT-62,y:46,width:124,height:24,rx:12,
+    fill:'#fff7ec',stroke:COL.accent,'stroke-width':1.6}));
+  svg.appendChild(TX(cxGT,62,'GT label = \u201ccar\u201d',{size:11,fill:'#a86b00',w:800}));
+  svg.appendChild(E('path',{d:'M '+cxGT+' 70 L '+cxGT+' '+(y-2),fill:'none',
+    stroke:COL.accent,'stroke-width':2,'marker-end':'url(#sfA)'}));
+  names.forEach((nm,k)=>{
+    const x=startX+k*(bw+gap),isBox=k<4,isGT=k===gtIdx;
+    const col=isBox?'#b56f00':'#2f6bff';
+    svg.appendChild(E('rect',{x:x,y:y,width:bw,height:bh,rx:6,
+      fill:isGT?'#2f6bff':(isBox?'#fff8ec':'#eef3ff'),
+      stroke:col,'stroke-width':isGT?2.8:1.6}));
+    svg.appendChild(TX(x+bw/2,y+21,nm,{size:11,fill:isGT?'#fff':col,w:800}));
+    svg.appendChild(TX(x+bw/2,y+38,vals[k].toFixed(2),{size:10,fill:isGT?'#fff':col}));
+  });
+  svg.appendChild(TX(startX+1.5*(bw+gap)+bw/2-gap/2,y+bh+18,
+    '4 box channels — l, t, r, b',{size:10,fill:'#b56f00',w:700}));
+  svg.appendChild(TX(startX+7*(bw+gap)+bw/2-gap/2,y+bh+18,
+    '5 class channels — one score each',{size:10,fill:'#2f6bff',w:700}));
+  svg.appendChild(E('path',{d:'M '+cxGT+' '+(y+bh+2)+' L '+cxGT+' '+(y+bh+13),
+    fill:'none',stroke:'#2f6bff','stroke-width':2}));
+  svg.appendChild(TX(cxGT,y+bh+32,'s',{size:15,fill:'#2f6bff',w:800}));
+  svg.appendChild(TX(cxGT+40,y+bh+32,'= the GT class channel = 0.91',
+    {size:10.5,fill:COL.muted,anchor:'start'}));
+})();
+
+/* ===================== ACT 7 — loss flow ===================== */
+(function(){
+  const svg=document.getElementById('lossFig');
+  const defs=E('defs',{});
+  const m=E('marker',{id:'lfA',markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(m);svg.appendChild(defs);
+  function node(x,y,w,h,fill,stroke,l1,l2,c1,c2){
+    svg.appendChild(E('rect',{x:x-w/2,y:y-h/2,width:w,height:h,rx:9,
+      fill:fill,stroke:stroke,'stroke-width':1.8}));
+    svg.appendChild(TX(x,y+(l2?-3:4),l1,{size:11.5,fill:c1||COL.ink,w:800}));
+    if(l2)svg.appendChild(TX(x,y+13,l2,{size:9.5,fill:c2||COL.muted}));
+  }
+  function arr(x1,y1,x2,y2){
+    svg.appendChild(E('path',{d:'M '+x1+' '+y1+' L '+x2+' '+y2,fill:'none',
+      stroke:'#9aaac6','stroke-width':2,'marker-end':'url(#lfA)'}));
+  }
+  node(118,80,156,52,'#dff3e6','#2ecc71','Positive cell','from top-k','#1a7d44');
+  node(118,170,156,52,'#eef0f4','#9aaac6','Background cell','every other cell','#61708a');
+  node(392,52,170,46,'#fff1d6','#f0c887','CIoU — box loss','pull box → GT','#a86b00');
+  node(392,108,170,46,'#e7eeff','#9db8f0','BCE — class loss','GT class → up','#2f6bff');
+  node(392,170,170,46,'#e7eeff','#9db8f0','BCE — class loss','all classes → 0','#2f6bff');
+  arr(198,72,305,52);
+  arr(198,90,305,108);
+  arr(198,170,305,170);
+  node(640,110,130,52,'#fff','#0b1b34','\u03a3  total loss',null);
+  arr(479,54,573,104);
+  arr(479,108,573,110);
+  arr(479,168,573,116);
+  node(862,110,150,52,'#0b1b34','#0b1b34','Backprop','update all weights','#fff','#aab4c6');
+  arr(707,110,785,110);
+  svg.appendChild(TX(510,222,
+    'Box loss only for positive cells · class loss for every cell — summed, then backpropagated',
+    {size:10.5,fill:'#8b97ac'}));
+})();
+
+/* ===================== ACT 7 — CIoU loss figure ===================== */
+(function(){
+  const svg=document.getElementById('ciouFig');
+  if(!svg)return;
+  const gt=COL.gt,pr=COL.p3;
+  const PX=10,PW=452,PH=116,GAP=14;
+  const meta=[
+    ['\u2460  IoU','overlap area  \u00f7  combined area'],
+    ['\u2461  Centre distance','pulls the two box centres together'],
+    ['\u2462  Aspect ratio','matches the width-to-height shape']];
+  for(let idx=0;idx<3;idx++){
+    const py=10+idx*(PH+GAP);
+    svg.appendChild(E('rect',{x:PX,y:py,width:PW,height:PH,rx:10,
+      fill:'#fbfcff',stroke:'#e2e9f7','stroke-width':1.5}));
+    svg.appendChild(TX(252,py+52,meta[idx][0],
+      {size:12.5,fill:COL.ink,w:800,anchor:'start'}));
+    svg.appendChild(TX(252,py+72,meta[idx][1],
+      {size:10.5,fill:COL.muted,anchor:'start'}));
+    if(idx===0){
+      const g={x:62,y:py+24,w:96,h:54},q={x:96,y:py+44,w:96,h:54};
+      const ix=Math.max(g.x,q.x),iy=Math.max(g.y,q.y),
+            iw=Math.min(g.x+g.w,q.x+q.w)-ix,ih=Math.min(g.y+g.h,q.y+q.h)-iy;
+      svg.appendChild(E('rect',{x:ix,y:iy,width:iw,height:ih,fill:gt,'fill-opacity':0.30}));
+      svg.appendChild(E('rect',{x:g.x,y:g.y,width:g.w,height:g.h,fill:'none',
+        stroke:gt,'stroke-width':2.4}));
+      svg.appendChild(E('rect',{x:q.x,y:q.y,width:q.w,height:q.h,fill:'none',
+        stroke:pr,'stroke-width':2.4,'stroke-dasharray':'5 3'}));
+      svg.appendChild(TX(ix+iw/2,iy+ih/2+3.4,'overlap',{size:8.5,fill:'#1a7d44',w:800}));
+      svg.appendChild(TX(g.x+1,g.y-5,'GT',{size:9,fill:gt,w:800,anchor:'start'}));
+      svg.appendChild(TX(q.x+q.w-1,q.y+q.h+11,'predicted',
+        {size:9,fill:pr,w:800,anchor:'end'}));
+    }else if(idx===1){
+      const g={x:60,y:py+28,w:84,h:50},q={x:100,y:py+44,w:84,h:50};
+      const ex=g.x,ey=g.y,ew=(q.x+q.w)-g.x,eh=(q.y+q.h)-g.y;
+      svg.appendChild(E('rect',{x:ex,y:ey,width:ew,height:eh,fill:'none',
+        stroke:'#aab4c6','stroke-width':1.2,'stroke-dasharray':'2 3'}));
+      svg.appendChild(E('line',{x1:ex,y1:ey,x2:ex+ew,y2:ey+eh,
+        stroke:'#aab4c6','stroke-width':1.2,'stroke-dasharray':'2 3'}));
+      svg.appendChild(TX(ex+ew+8,ey+eh-2,'c',{size:11,fill:'#8b97ac',w:800,anchor:'start'}));
+      svg.appendChild(E('rect',{x:g.x,y:g.y,width:g.w,height:g.h,fill:'none',
+        stroke:gt,'stroke-width':2.4}));
+      svg.appendChild(E('rect',{x:q.x,y:q.y,width:q.w,height:q.h,fill:'none',
+        stroke:pr,'stroke-width':2.4,'stroke-dasharray':'5 3'}));
+      const gc=[g.x+g.w/2,g.y+g.h/2],qc=[q.x+q.w/2,q.y+q.h/2];
+      svg.appendChild(E('line',{x1:gc[0],y1:gc[1],x2:qc[0],y2:qc[1],
+        stroke:COL.accent,'stroke-width':2.4}));
+      svg.appendChild(E('circle',{cx:gc[0],cy:gc[1],r:3.4,fill:gt}));
+      svg.appendChild(E('circle',{cx:qc[0],cy:qc[1],r:3.4,fill:pr}));
+      svg.appendChild(TX((gc[0]+qc[0])/2+11,(gc[1]+qc[1])/2-3,'d',
+        {size:11,fill:COL.accent,w:800}));
+    }else{
+      const cx=122,cy=py+58;
+      svg.appendChild(E('rect',{x:cx-30,y:cy-39,width:60,height:78,fill:'none',
+        stroke:gt,'stroke-width':2.4}));
+      svg.appendChild(E('rect',{x:cx-52,y:cy-23,width:104,height:46,fill:'none',
+        stroke:pr,'stroke-width':2.4,'stroke-dasharray':'5 3'}));
+      svg.appendChild(TX(cx,py+13,'GT \u2014 tall',{size:8.5,fill:gt,w:800}));
+      svg.appendChild(TX(cx,py+110,'predicted \u2014 wide',{size:8.5,fill:pr,w:800}));
+    }
+  }
+})();
+
+/* ===================== ACT 7 — dual-head (NMS-free) figure ===================== */
+(function(){
+  const svg=document.getElementById('dualFig');
+  if(!svg)return;
+  const gt=COL.gt,blu=COL.p3;
+  const defs=E('defs',{});
+  const m=E('marker',{id:'dhA',markerWidth:8,markerHeight:8,refX:6,refY:3,orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(m);svg.appendChild(defs);
+  svg.appendChild(E('rect',{x:350,y:14,width:320,height:38,rx:9,
+    fill:'#eef4ff',stroke:'#cdd9f6','stroke-width':1.5}));
+  svg.appendChild(TX(510,38,'Shared backbone + neck features',{size:11.5,fill:COL.ink,w:800}));
+  svg.appendChild(E('path',{d:'M 458 52 C 400 70, 320 68, 276 86',fill:'none',
+    stroke:'#9aaac6','stroke-width':1.8,'marker-end':'url(#dhA)'}));
+  svg.appendChild(E('path',{d:'M 562 52 C 620 70, 700 68, 744 86',fill:'none',
+    stroke:'#9aaac6','stroke-width':1.8,'marker-end':'url(#dhA)'}));
+  function panel(px,accent,title,sub,rule,filled,scores,verdict,vgood){
+    const py=92,pw=440,ph=212;
+    svg.appendChild(E('rect',{x:px,y:py,width:pw,height:ph,rx:11,
+      fill:'#fff',stroke:'#e2e9f7','stroke-width':1.5}));
+    svg.appendChild(TX(px+pw/2,py+24,title,{size:13,fill:COL.ink,w:800}));
+    svg.appendChild(TX(px+pw/2,py+40,sub,{size:10,fill:COL.muted}));
+    const cols=7,rows=5,cs=20,gx=px+26,gy=py+58;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const on=filled.some(f=>f[0]===c&&f[1]===r);
+      svg.appendChild(E('rect',{x:gx+c*cs,y:gy+r*cs,width:cs,height:cs,
+        fill:on?accent:'#fff','fill-opacity':on?0.85:1,
+        stroke:'#dde6f6','stroke-width':1}));
+    }
+    svg.appendChild(E('rect',{x:gx+16,y:gy+16,width:68,height:68,fill:'none',
+      stroke:gt,'stroke-width':2.6}));
+    svg.appendChild(TX(gx+50,gy-7,'GT box',{size:8.5,fill:gt,w:800}));
+    svg.appendChild(TX(gx+cols*cs/2,gy+rows*cs+16,
+      filled.length+(filled.length===1?' cell positive':' cells positive'),
+      {size:9.5,fill:COL.muted,w:700}));
+    const rx=gx+cols*cs+30;
+    svg.appendChild(TX(rx,py+62,'Assignment',{size:10,fill:'#9aa6bc',w:800,anchor:'start'}));
+    svg.appendChild(TX(rx,py+79,rule,{size:10,fill:COL.ink,anchor:'start'}));
+    svg.appendChild(TX(rx,py+108,'At inference \u2014 "car" scores',
+      {size:10,fill:'#9aa6bc',w:800,anchor:'start'}));
+    scores.forEach((s,k)=>{
+      const hi=s>=0.5,cx=rx+k*40;
+      svg.appendChild(E('rect',{x:cx,y:py+118,width:34,height:20,rx:4,
+        fill:hi?blu:'#eef1f6',stroke:hi?blu:'#dde3ec','stroke-width':1}));
+      svg.appendChild(TX(cx+17,py+132,s.toFixed(2),
+        {size:8.5,fill:hi?'#fff':'#9aa6bc',w:800}));
+    });
+    svg.appendChild(E('rect',{x:rx,y:py+150,width:214,height:44,rx:8,
+      fill:vgood?'#eafaf0':'#fff4f4',stroke:vgood?'#bce8cd':'#f4d4d4','stroke-width':1.3}));
+    svg.appendChild(TX(rx+107,py+167,(vgood?'\u2713  ':'\u2717  ')+verdict[0],
+      {size:10,fill:vgood?'#1a7d44':'#c0392b',w:800}));
+    svg.appendChild(TX(rx+107,py+183,verdict[1],{size:9,fill:COL.muted}));
+  }
+  panel(56,blu,'One-to-many head','training only \u2014 dense supervision',
+    'top-k by t  (keeps ~10 cells)',
+    [[1,1],[2,1],[3,1],[1,2],[2,2],[3,2],[1,3],[2,3],[3,3]],
+    [0.91,0.88,0.84,0.78,0.10],
+    ['many cells fire','overlapping boxes \u2014 must run NMS'],false);
+  panel(524,COL.accent,'One-to-one head','the head that runs at inference',
+    'top-1 by t  (1 cell; rest \u2192 background)',
+    [[2,2]],[0.93,0.05,0.04,0.06,0.03],
+    ['one cell fires','one clean box \u2014 no NMS needed'],true);
+  svg.appendChild(TX(510,326,
+    'YOLO26 trains both heads on the shared features \u2014 then ships only the '+
+    'one-to-one head, so inference is natively NMS-free.',
+    {size:10.5,fill:'#8b97ac'}));
+})();
+
+/* ===================== ACT 8 ===================== */
+(function(){
+  const cv=document.getElementById('a8canvas');
+  const STEPS=[
+    {t:'Every cell across P3, P4 and P5 outputs a prediction vector — 8400 cells in total.',k:'grid'},
+    {t:'The 4 box numbers are decoded with each cell\'s anchor point + stride into pixel boxes — many overlapping boxes per object.',k:'raw'},
+    {t:'Older YOLO heads need NMS — Non-Maximum Suppression keeps the best box and removes overlapping duplicates.',k:'nms'},
+    {t:'YOLO26\'s one-to-one head produces exactly one box per object directly — no NMS step.',k:'o2o'},
+    {t:'Coordinates are mapped back through the letterbox transform → final detections on the original image.',k:'final'}
+  ];
+  let step=0;
+  function render(){
+    const{c,w,h}=fit(cv,240);c.clearRect(0,0,w,h);
+    const k=STEPS[step].k;
+    const iw=Math.min(w*0.6,340),ih=h-30,ix=(w-iw)/2,iy=15;
+    scene(c,ix,iy,iw,ih,false);
+    c.strokeStyle='#d9e4ff';c.strokeRect(ix,iy,iw,ih);
+    if(k==='grid'){
+      [[20,'#2f6bff55'],[12,'#ff8a0044'],[7,'#7c3aed33']].forEach(([n,col])=>{
+        c.strokeStyle=col;c.lineWidth=1;const gp=iw/n;
+        for(let x=ix;x<=ix+iw;x+=gp){c.beginPath();c.moveTo(x,iy);c.lineTo(x,iy+ih);c.stroke();}
+        for(let y=iy;y<=iy+ih;y+=gp){c.beginPath();c.moveTo(ix,y);c.lineTo(ix+iw,y);c.stroke();}
+      });
+      c.fillStyle='#0b1b34';c.font='700 11px ui-sans-serif';c.textAlign='center';
+      c.fillText('80² + 40² + 20² = 8400 cells',w/2,h-8);c.textAlign='left';
+    }else if(k==='raw'){
+      OBJ.forEach(o=>{const[bx,by,bw,bh]=o.b;
+        for(let n=0;n<6;n++){
+          const jx=(Math.random()-0.5)*0.06,jy=(Math.random()-0.5)*0.06,jw=(Math.random()-0.5)*0.06;
+          c.strokeStyle=o.col;c.globalAlpha=0.45;c.lineWidth=1.4;
+          c.strokeRect(ix+iw*(bx+jx),iy+ih*(by+jy),iw*(bw+jw),ih*(bh+jw));}
+      });
+      c.globalAlpha=1;c.fillStyle='#ff5252';c.font='700 11px ui-sans-serif';c.textAlign='center';
+      c.fillText('many overlapping boxes per object',w/2,h-8);c.textAlign='left';
+    }else{
+      OBJ.forEach(o=>{const[bx,by,bw,bh]=o.b;
+        c.strokeStyle=o.col;c.lineWidth=2.4;c.strokeRect(ix+iw*bx,iy+ih*by,iw*bw,ih*bh);
+        c.fillStyle=o.col;c.font='700 9px ui-sans-serif';c.fillText(o.n,ix+iw*bx+2,iy+ih*by-4);
+      });
+      c.textAlign='center';c.font='700 11px ui-sans-serif';
+      if(k==='nms'){c.fillStyle='#61708a';c.fillText('NMS removed the duplicates (extra step)',w/2,h-8);}
+      else if(k==='o2o'){c.fillStyle='#2ecc71';c.fillText('one-to-one head → already clean · NMS-free',w/2,h-8);}
+      else{c.fillStyle='#2f6bff';c.fillText('final detections on the original image',w/2,h-8);}
+      c.textAlign='left';
+    }
+    document.getElementById('a8label').textContent=STEPS[step].t;
+    document.getElementById('a8step').textContent='Step '+(step+1)+' / '+STEPS.length;
+    document.getElementById('a8fill').style.width=((step+1)/STEPS.length*100)+'%';
+    document.getElementById('a8prev').disabled=step===0;
+    document.getElementById('a8next').disabled=step===STEPS.length-1;
+  }
+  document.getElementById('a8next').onclick=()=>{if(step<STEPS.length-1){step++;render();}};
+  document.getElementById('a8prev').onclick=()=>{if(step>0){step--;render();}};
+  addEventListener('resize',render);render();
+})();
+
+/* ===================== SUMMARY ===================== */
+(function(){
+  const svg=document.getElementById('sumFig');
+  const defs=E('defs',{});
+  const m=E('marker',{id:'sa',markerWidth:8,markerHeight:8,refX:6.5,refY:3,orient:'auto'});
+  m.appendChild(E('path',{d:'M0,0 L6.5,3 L0,6 Z',fill:'#9aaac6'}));
+  defs.appendChild(m);svg.appendChild(defs);
+  const nodes=[
+    {x:78,lab:'INPUT',sub:'letterbox 640',col:'#61708a'},
+    {x:248,lab:'Backbone',sub:'taps P3/P4/P5',col:'#2f6bff'},
+    {x:418,lab:'Neck',sub:'FPN + PAN fuse',col:'#ff8a00'},
+    {x:588,lab:'Head',sub:'cell → box+class',col:'#7c3aed'},
+    {x:768,lab:'Decode',sub:'8400 → boxes',col:'#2f6bff'},
+    {x:935,lab:'OUTPUT',sub:'NMS-free',col:'#2ecc71'}
+  ];
+  const y=92,bw=126,bh=56;
+  nodes.forEach((n,i)=>{
+    if(i>0)svg.appendChild(E('line',{x1:nodes[i-1].x+bw/2+4,y1:y,x2:n.x-bw/2-4,y2:y,
+      stroke:'#9aaac6','stroke-width':2,'marker-end':'url(#sa)'}));
+    svg.appendChild(E('rect',{x:n.x-bw/2,y:y-bh/2,width:bw,height:bh,rx:11,
+      fill:'#fff',stroke:n.col,'stroke-width':2}));
+    svg.appendChild(TX(n.x,y-3,n.lab,{size:14,fill:n.col,w:800}));
+    svg.appendChild(TX(n.x,y+15,n.sub,{size:10,fill:'#61708a'}));
+  });
+  svg.appendChild(E('rect',{x:30,y:158,width:560,height:30,rx:8,fill:'#fff1d6',stroke:'#ffd98a'}));
+  svg.appendChild(TX(310,177,'TRAINING — label assignment · loss (BCE + CIoU) · backprop',
+    {size:11,fill:'#a86b00',w:700}));
+  svg.appendChild(E('rect',{x:610,y:158,width:380,height:30,rx:8,fill:'#dff3e6',stroke:'#a9e6c0'}));
+  svg.appendChild(TX(800,177,'INFERENCE — forward pass · decode · output',
+    {size:11,fill:'#1a7d44',w:700}));
+  svg.appendChild(TX(510,222,'Same network — training adds assignment + loss; inference just runs forward.',
+    {size:11,fill:'#8b97ac'}));
+})();
+
+/* nav scroll-spy */
+(function(){
+  const links=document.querySelectorAll('.nl');
+  const secs=[...document.querySelectorAll('section.act')];
+  function spy(){let cur=secs[0].id;
+    secs.forEach(s=>{if(scrollY>=s.offsetTop-100)cur=s.id;});
+    links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+cur));}
+  addEventListener('scroll',spy,{passive:true});spy();
+})();
+addEventListener('load',()=>{try{dispatchEvent(new Event('resize'));}catch(e){}});
+</script>
+</body>
+</html>
