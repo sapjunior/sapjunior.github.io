@@ -831,7 +831,7 @@
     <li><strong>4 · Receptive field</strong> — three scales because a cell only detects what fits its RF.</li>
     <li><strong>5 · The neck</strong> — FPN sends meaning down, PAN sends precision up.</li>
     <li><strong>6 · Full network</strong> — one forward pass: input → backbone → neck → head → output.</li>
-    <li><strong>7 · Grid ↔ truth</strong> — a cell's channels are x,y,w,h,class; training assigns GTs, then optimizes.</li>
+    <li><strong>7 · Grid ↔ truth</strong> — a cell's channels are l,t,r,b,class; training assigns GTs, then optimizes.</li>
     <li><strong>8 · Grid → box</strong> — decode 8400 cells, deduplicate (NMS-free), map back to the image.</li>
   </ul>
 
@@ -855,7 +855,7 @@
 
 <footer><div class="wrap">
   <div style="margin-top:5px;font-size:13px;color:var(--muted)">Created by
-    <strong style="color:var(--ink)">Thananop Kobchaisawat | 2110533 Computer Vision</strong></div>
+    <strong style="color:var(--ink)">Thananop Kobchaisawat | 2110433 Computer Vision</strong></div>
 </div></footer>
 
 <script>
