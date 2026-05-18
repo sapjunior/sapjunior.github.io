@@ -328,14 +328,14 @@
     semantics</strong> but coarse location. Neither is good alone — so the Neck runs two flows.</p>
 
   <div class="viz card"><div class="viz-pad">
-    <svg id="neckFig" class="fig" viewBox="0 0 1020 430"></svg>
+    <svg id="neckFig" class="fig" viewBox="0 0 1020 478"></svg>
   </div>
   <div class="viz-bar"><span class="viz-cap">⊕ = Concat (fuse) · the vertical axis is
     <strong>resolution / depth</strong> — P3 shallow &amp; fine at the bottom, P5 deep &amp;
     coarse at the top.</span></div>
   </div>
 
-  <p>Read it left to right. The <strong>Backbone</strong> (faint, left) goes deep top-to-bottom
+  <p>Read it left to right. The <strong>Backbone</strong> (faint, left) goes deep bottom-to-top
     and taps three levels — <span class="acc-p3">C3</span>, <span class="acc-p4">C4</span>,
     <span class="acc-p5">C5</span>. The <span class="acc-p3">FPN — top-down</span> flow upsamples
     deep maps and merges them <strong>downward</strong> via lateral connections (carrying
@@ -1283,13 +1283,13 @@ function setPyrFocus(svgId,groups){
       fill:'#eef2f9',stroke:'#cdd8ea','stroke-width':1.5,'stroke-dasharray':'5 4'}));
     const dep=TX(48,245,'deeper →',{size:9,fill:'#9aa6bc',w:700});
     dep.setAttribute('transform','rotate(-90 48 245)');svg.appendChild(dep);
-    // input
-    svg.appendChild(E('rect',{x:64,y:22,width:96,height:50,rx:7,fill:'#fff',
+    // input — enters at the shallow (bottom) end of the backbone, flows upward
+    svg.appendChild(E('rect',{x:64,y:410,width:96,height:50,rx:7,fill:'#fff',
       stroke:COL.muted,'stroke-width':1.6}));
-    svg.appendChild(E('rect',{x:71,y:29,width:82,height:28,fill:'#cfe0f6'}));
-    svg.appendChild(E('rect',{x:71,y:47,width:82,height:10,fill:'#c9d3c0'}));
-    svg.appendChild(TX(112,15,'INPUT 640²',{size:10,fill:COL.muted,w:800}));
-    svg.appendChild(E('path',{d:'M 112 72 L 112 102',fill:'none',stroke:'#9aaac6',
+    svg.appendChild(E('rect',{x:71,y:417,width:82,height:28,fill:'#cfe0f6'}));
+    svg.appendChild(E('rect',{x:71,y:435,width:82,height:10,fill:'#c9d3c0'}));
+    svg.appendChild(TX(112,403,'INPUT 640²',{size:10,fill:COL.muted,w:800}));
+    svg.appendChild(E('path',{d:'M 112 410 L 112 388',fill:'none',stroke:'#9aaac6',
       'stroke-width':2,'marker-end':'url(#nG)'}));
     // C-tap nodes
     rows.forEach(r=>{
@@ -1298,7 +1298,7 @@ function setPyrFocus(svgId,groups){
         fill:'#fff',stroke:SLAB[r].col,'stroke-width':1.8}));
       svg.appendChild(TX(CX.ctap,y+4,'C'+r[1]+' · '+RES[r],{size:11,fill:SLAB[r].col,w:800}));
     });
-    svg.appendChild(TX(CX.ctap,400,'Backbone taps',{size:10,fill:'#8b97ac',w:700}));
+    svg.appendChild(TX(CX.ctap,372,'Backbone taps',{size:10,fill:'#8b97ac',w:700}));
     // ----- lateral + horizontal flows -----
     rows.forEach(r=>{
       const y=ROW[r],sw=SLAB[r].w/2;
