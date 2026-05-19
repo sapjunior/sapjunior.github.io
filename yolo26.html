@@ -1245,6 +1245,7 @@ function setPyrFocus(svgId,groups){
 (function(){
   const svg=document.getElementById('neckFig');
   const SLAB={p3:{col:COL.p3,w:60,h:44},p4:{col:COL.p4,w:46,h:34},p5:{col:COL.p5,w:34,h:26}};
+  const SK=24;
   const RES={p3:'80²',p4:'40²',p5:'20²'};
   const ROW={p5:132,p4:236,p3:340};
   const CX={ctap:110,fpn:420,pan:668,head:858,out:976};
@@ -1266,15 +1267,19 @@ function setPyrFocus(svgId,groups){
         fill:'none',stroke:bow<0?COL.p3:COL.p4,'stroke-width':2.6,
         'marker-end':'url(#'+(bow<0?'nF':'nP')+')'}));
     }
+    function paraPts(cx,cy,w,h){
+      return (cx-w/2)+','+(cy+h/2)+' '+(cx+w/2)+','+(cy+h/2)+' '
+        +(cx+w/2+SK)+','+(cy-h/2)+' '+(cx-w/2+SK)+','+(cy-h/2);
+    }
     function slab(x,y,lv,fuse){
       const S=SLAB[lv];
-      svg.appendChild(E('rect',{x:x-S.w/2,y:y-S.h/2,width:S.w,height:S.h,rx:6,
+      svg.appendChild(E('polygon',{points:paraPts(x,y,S.w,S.h),
         fill:S.col+'2b',stroke:S.col,'stroke-width':2}));
-      svg.appendChild(TX(x,y+4,lv.toUpperCase(),{size:11,fill:S.col,w:800}));
+      svg.appendChild(TX(x+SK/2,y+4,lv.toUpperCase(),{size:11,fill:S.col,w:800}));
       if(fuse){
-        svg.appendChild(E('circle',{cx:x-S.w/2,cy:y-S.h/2,r:9.5,fill:'#fff',
+        svg.appendChild(E('circle',{cx:x-S.w/2+SK,cy:y-S.h/2,r:9.5,fill:'#fff',
           stroke:'#7c3aed','stroke-width':1.8}));
-        svg.appendChild(TX(x-S.w/2,y-S.h/2+4.5,'+',{size:14,fill:'#7c3aed',w:800}));
+        svg.appendChild(TX(x-S.w/2+SK,y-S.h/2+4.5,'+',{size:14,fill:'#7c3aed',w:800}));
       }
     }
     const rows=['p5','p4','p3'];
@@ -1284,36 +1289,37 @@ function setPyrFocus(svgId,groups){
     const dep=TX(48,245,'deeper →',{size:9,fill:'#9aa6bc',w:700});
     dep.setAttribute('transform','rotate(-90 48 245)');svg.appendChild(dep);
     // input — enters at the shallow (bottom) end of the backbone, flows upward
-    svg.appendChild(E('rect',{x:64,y:410,width:96,height:50,rx:7,fill:'#fff',
-      stroke:COL.muted,'stroke-width':1.6}));
-    svg.appendChild(E('rect',{x:71,y:417,width:82,height:28,fill:'#cfe0f6'}));
-    svg.appendChild(E('rect',{x:71,y:435,width:82,height:10,fill:'#c9d3c0'}));
-    svg.appendChild(TX(112,403,'INPUT 640²',{size:10,fill:COL.muted,w:800}));
-    svg.appendChild(E('path',{d:'M 112 410 L 112 388',fill:'none',stroke:'#9aaac6',
+    svg.appendChild(E('polygon',{points:paraPts(112,435,96,50),
+      fill:'#cfe0f6',stroke:COL.muted,'stroke-width':1.6}));
+    svg.appendChild(E('polygon',{points:'64,460 160,460 167,445 71,445',fill:'#c9d3c0'}));
+    svg.appendChild(E('polygon',{points:paraPts(112,435,96,50),
+      fill:'none',stroke:COL.muted,'stroke-width':1.6}));
+    svg.appendChild(TX(124,403,'INPUT 640²',{size:10,fill:COL.muted,w:800}));
+    svg.appendChild(E('path',{d:'M 124 410 L 124 388',fill:'none',stroke:'#9aaac6',
       'stroke-width':2,'marker-end':'url(#nG)'}));
     // C-tap nodes
     rows.forEach(r=>{
       const y=ROW[r];
-      svg.appendChild(E('rect',{x:CX.ctap-46,y:y-15,width:92,height:30,rx:6,
+      svg.appendChild(E('polygon',{points:paraPts(CX.ctap,y,92,30),
         fill:'#fff',stroke:SLAB[r].col,'stroke-width':1.8}));
-      svg.appendChild(TX(CX.ctap,y+4,'C'+r[1]+' · '+RES[r],{size:11,fill:SLAB[r].col,w:800}));
+      svg.appendChild(TX(CX.ctap+SK/2,y+4,'C'+r[1]+' · '+RES[r],{size:11,fill:SLAB[r].col,w:800}));
     });
     svg.appendChild(TX(CX.ctap,372,'Backbone taps',{size:10,fill:'#8b97ac',w:700}));
     // ----- lateral + horizontal flows -----
     rows.forEach(r=>{
       const y=ROW[r],sw=SLAB[r].w/2;
-      hline(CX.ctap+46,y,CX.fpn-sw-2,'#9aaac6','nG');           // C-tap -> FPN (lateral)
-      hline(CX.fpn+sw,y,CX.pan-sw-2,'#9aaac6','nG');            // FPN -> PAN
-      hline(CX.pan+sw,y,CX.head-32,COL.gt,'nO');                // PAN -> Head
+      hline(CX.ctap+46+SK/2,y,CX.fpn-sw+SK/2-2,'#9aaac6','nG');           // C-tap -> FPN (lateral)
+      hline(CX.fpn+sw+SK/2,y,CX.pan-sw+SK/2-2,'#9aaac6','nG');            // FPN -> PAN
+      hline(CX.pan+sw+SK/2,y,CX.head-32,COL.gt,'nO');                // PAN -> Head
     });
     // ----- FPN top-down -----
-    vcurve(CX.fpn,ROW.p5+SLAB.p5.h/2,ROW.p4-SLAB.p4.h/2,-66);
-    vcurve(CX.fpn,ROW.p4+SLAB.p4.h/2,ROW.p3-SLAB.p3.h/2,-66);
+    vcurve(CX.fpn+SK/2,ROW.p5+SLAB.p5.h/2,ROW.p4-SLAB.p4.h/2,-66);
+    vcurve(CX.fpn+SK/2,ROW.p4+SLAB.p4.h/2,ROW.p3-SLAB.p3.h/2,-66);
     svg.appendChild(TX(CX.fpn-80,(ROW.p5+ROW.p4)/2+3,'upsample',{size:9,fill:COL.p3,w:700}));
     svg.appendChild(TX(CX.fpn-80,(ROW.p4+ROW.p3)/2+3,'upsample',{size:9,fill:COL.p3,w:700}));
     // ----- PAN bottom-up -----
-    vcurve(CX.pan,ROW.p3-SLAB.p3.h/2,ROW.p4+SLAB.p4.h/2,66);
-    vcurve(CX.pan,ROW.p4-SLAB.p4.h/2,ROW.p5+SLAB.p5.h/2,66);
+    vcurve(CX.pan+SK/2,ROW.p3-SLAB.p3.h/2,ROW.p4+SLAB.p4.h/2,66);
+    vcurve(CX.pan+SK/2,ROW.p4-SLAB.p4.h/2,ROW.p5+SLAB.p5.h/2,66);
     svg.appendChild(TX(CX.pan+86,(ROW.p3+ROW.p4)/2+3,'downsample',{size:9,fill:COL.p4,w:700}));
     svg.appendChild(TX(CX.pan+86,(ROW.p4+ROW.p5)/2+3,'downsample',{size:9,fill:COL.p4,w:700}));
     // ----- slabs : FPN (P4,P3 fuse) · PAN (P5,P4 fuse) -----
